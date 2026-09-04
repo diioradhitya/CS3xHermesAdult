@@ -2,6 +2,7 @@ package com.podjav
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.newSubtitleFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -105,6 +106,37 @@ class PodJavProvider : MainAPI() {
 
             val video = document.selectFirst("video#podjavPlayer")
             val sourcesJson = video?.attr("data-sources")
+            
+            // Extract subtitles - need fresh URL via AJAX
+            val postId = video?.attr("data-post-id")
+            val blogId = video?.attr("data-blog-id") ?: "1"
+            if (!postId.isNullOrBlank()) {
+                launch(Dispatchers.IO) {
+                    try {
+                        // Get fresh subtitle URL via AJAX
+                        val ajaxUrl = "$mainUrl/subtitle-ajax.php"
+                        val formData = mapOf(
+                            "pid" to postId,
+                            "bid" to blogId
+                        )
+                        val ajaxResponse = app.post(ajaxUrl, data = formData, headers = headers)
+                        val responseBody = ajaxResponse.body?.string() ?: return@launch
+                        val json = com.google.gson.JsonParser.parseString(responseBody).asJsonObject
+                        val success = json.get("success")?.asBoolean ?: false
+                        val subUrl = json.get("data")?.asJsonObject?.get("url")?.asString
+                        
+                        if (success && !subUrl.isNullOrBlank()) {
+                            val fullSubUrl = if (subUrl.startsWith("http")) subUrl else "$mainUrl$subUrl"
+                            subtitleCallback(
+                                newSubtitleFile("Indonesia", fullSubUrl)
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
             if (!sourcesJson.isNullOrBlank()) {
                 val sources = com.google.gson.JsonParser.parseString(sourcesJson).asJsonArray
                 sources.forEach { source ->
