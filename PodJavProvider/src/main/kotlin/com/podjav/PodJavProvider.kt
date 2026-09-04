@@ -96,50 +96,50 @@ class PodJavProvider : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
-        val document = app.get(data, headers = headers).document
+            data: String,
+            isCasting: Boolean,
+            subtitleCallback: (SubtitleFile) -> Unit,
+            callback: (ExtractorLink) -> Unit
+        ): Boolean = coroutineScope {
+            val document = app.get(data, headers = headers).document
 
-        val video = document.selectFirst("video#podjavPlayer")
-        val sourcesJson = video?.attr("data-sources")
-        if (!sourcesJson.isNullOrBlank()) {
-            val urls = Regex("""https?[^"\\]+\.(?:m3u8|mp4)[^"\\]*""")
-                .findAll(sourcesJson)
-                .map { it.value.replace("\\/", "/") }
-                .toList()
-            urls.forEach { streamUrl ->
-                launch(Dispatchers.IO) {
-                    try {
-                        if (streamUrl.contains(".m3u8")) {
-                            M3u8Helper.generateM3u8(
-                                name,
-                                streamUrl,
-                                mainUrl,
-                                headers = mapOf(
-                                    "Referer" to mainUrl,
-                                    "User-Agent" to headers.getValue("User-Agent")
+            val video = document.selectFirst("video#podjavPlayer")
+            val sourcesJson = video?.attr("data-sources")
+            if (!sourcesJson.isNullOrBlank()) {
+                val sources = com.google.gson.JsonParser.parseString(sourcesJson).asJsonArray
+                sources.forEach { source ->
+                    val url = source.asJsonObject.get("url")?.asString ?: return@forEach
+                    val type = source.asJsonObject.get("type")?.asString ?: ""
+                    val name = source.asJsonObject.get("label")?.asString ?: "PodJav"
+                    launch(Dispatchers.IO) {
+                        try {
+                            if (type == "m3u8" || url.contains(".m3u8")) {
+                                M3u8Helper.generateM3u8(
+                                    name,
+                                    url,
+                                    mainUrl,
+                                    headers = mapOf(
+                                        "Referer" to mainUrl,
+                                        "User-Agent" to headers.getValue("User-Agent")
+                                    )
+                                ).forEach(callback)
+                            } else {
+                                callback(
+                                    newExtractorLink(
+                                        name,
+                                        name,
+                                        url,
+                                        ExtractorLinkType.VIDEO
+                                    ) { this.referer = mainUrl }
                                 )
-                            ).forEach(callback)
-                        } else {
-                            callback(
-                                newExtractorLink(
-                                    name,
-                                    name,
-                                    streamUrl,
-                                    ExtractorLinkType.VIDEO
-                                ) { this.referer = mainUrl }
-                            )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
                     }
                 }
             }
-        }
 
-        return@coroutineScope true
-    }
+            return@coroutineScope true
+        }
 }
