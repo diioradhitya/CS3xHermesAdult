@@ -1,0 +1,9 @@
+{
+    "name": "CS3xHermes Adult",
+    "iconUrl": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/icon.png",
+    "description": "CloudStream extensions for adult content (NSFW)",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/plugins.json"
+    ]
+}
