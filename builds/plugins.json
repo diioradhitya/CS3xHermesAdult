@@ -1,16 +1,34 @@
-[{
-  "iconUrl": "https://javhey.com/wp-content/uploads/2024/06/javhey.com-logo.png",
-  "apiVersion": 1,
-  "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-  "fileSize": 22542,
-  "fileHash": "sha256-4a8fbf798f5707b76a928b2282043dda04e5daef5ec2d927365078ed9ed5a0b0",
-  "status": 1,
-  "language": "id",
-  "authors": ["Dio R"],
-  "tvTypes": ["NSFW"],
-  "version": 1,
-  "internalName": "JavHeyProvider",
-  "description": "JavHey — Streaming Porn and JAV",
-  "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3",
-  "name": "JavHey"
-}]
+[
+  {
+    "iconUrl": "https://javhey.com/wp-content/uploads/2024/06/javhey.com-logo.png",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 22542,
+    "fileHash": "sha256-4a8fbf798f5707b76a928b2282043dda04e5daef5ec2d927365078ed9ed5a0b0",
+    "status": 1,
+    "language": "id",
+    "authors": ["Dio R"],
+    "tvTypes": ["NSFW"],
+    "version": 1,
+    "internalName": "JavHeyProvider",
+    "description": "JavHey — Streaming Porn and JAV",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3",
+    "name": "JavHey"
+  },
+  {
+    "iconUrl": "https://podjav.tv/wp-content/uploads/2025/02/cropped-podjav-192x192.png",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 13637,
+    "fileHash": "sha256-3cc8ef9f11e22a18c92fe03d4ccf9935f4eb05e1850cb3bf29756e75fb8bba33",
+    "status": 1,
+    "language": "id",
+    "authors": ["Dio R"],
+    "tvTypes": ["NSFW"],
+    "version": 1,
+    "internalName": "PodJavProvider",
+    "description": "PodJav — Streaming JAV Sub Indo, langsung m3u8",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3",
+    "name": "PodJav"
+  }
+]
