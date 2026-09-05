@@ -6,45 +6,115 @@
     "fileSize": 22542,
     "fileHash": "sha256-4a8fbf798f5707b76a928b2282043dda04e5daef5ec2d927365078ed9ed5a0b0",
     "status": 1,
-    "language": "id",
-    "authors": ["Dio R"],
-    "tvTypes": ["NSFW"],
+    "name": "JavHey",
+    "description": "JavHey — Free JAV streaming",
     "version": 1,
+    "tags": [
+      "adult",
+      "jav",
+      "NSFW"
+    ],
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.javhey.JavHeyProviderPlugin",
     "internalName": "JavHeyProvider",
-    "description": "JavHey — Streaming Porn and JAV",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3",
-    "name": "JavHey"
+    "allowedDomains": [
+      "javhey.com"
+    ]
   },
   {
-    "iconUrl": "https://podjav.tv/wp-content/uploads/2025/02/podjav.jpg",
+    "iconUrl": "https://podjav.tv/favicon.png",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 13637,
+    "fileSize": 22748,
     "fileHash": "sha256-6014d9f24220f4181e044e12fe457dd9bcdfe17575d88af7dbf940bcba639ab3",
     "status": 1,
-    "language": "id",
-    "authors": ["Dio R"],
-    "tvTypes": ["NSFW"],
+    "name": "PodJav",
+    "description": "PodJav — JAV streaming with subtitle support",
     "version": 2,
+    "tags": [
+      "adult",
+      "jav",
+      "NSFW",
+      "subtitle"
+    ],
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.podjav.PodJavProviderPlugin",
     "internalName": "PodJavProvider",
-    "description": "PodJav — Streaming JAV Sub Indo, langsung m3u8",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3",
-    "name": "PodJav"
+    "allowedDomains": [
+      "podjav.tv"
+    ]
   },
   {
-    "iconUrl": "https://javtiful.com/uploads/site/icon/2026/04/27/new_jt_icon.png",
+    "iconUrl": "https://javtiful.com/favicon.png",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 14117,
-    "fileHash": "sha256-b3f5fa679f9b43cef77d1b390b33d8229fd99f1ee5c42a50ff1f1739229454cd",
+    "fileSize": 15838,
+    "fileHash": "sha256-99767141b927763c626c7d04abac641dd9383a65868d3b2843983455567896c5",
     "status": 1,
-    "language": "id",
-    "authors": ["Dio R"],
-    "tvTypes": ["NSFW"],
+    "name": "Javtiful",
+    "description": "Javtiful — JAV HD streaming, Chinese AV & adult content",
     "version": 1,
+    "tags": [
+      "adult",
+      "jav",
+      "NSFW"
+    ],
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.javtiful.JavtifulProviderPlugin",
     "internalName": "JavtifulProvider",
-    "description": "Javtiful — Streaming JAV HD, Chinese AV, dan konten dewasa lainnya",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavtifulProvider.cs3",
-    "name": "Javtiful"
+    "allowedDomains": [
+      "javtiful.com"
+    ]
+  },
+  {
+    "iconUrl": "https://javstory1.com/wp-content/uploads/2021/05/cropped-android-chrome-512x512-1.png",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 10600,
+    "fileHash": "sha256-7f35efbfff0c13738d39602390fd0f2229532b4e3a05f2589c75bf8f9083861c",
+    "status": 1,
+    "name": "JavStory",
+    "description": "JAVStory1 — JAV streaming with Indo & English subtitle",
+    "version": 1,
+    "tags": [
+      "adult",
+      "jav",
+      "NSFW",
+      "subtitle"
+    ],
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.javstory.JavStoryProviderPlugin",
+    "internalName": "JavStoryProvider",
+    "allowedDomains": [
+      "javstory1.com"
+    ]
   }
 ]
