@@ -30,5 +30,21 @@
     "description": "PodJav — Streaming JAV Sub Indo, langsung m3u8",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3",
     "name": "PodJav"
+  },
+  {
+    "iconUrl": "https://javtiful.com/uploads/site/icon/2026/04/27/new_jt_icon.png",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 14117,
+    "fileHash": "sha256-b3f5fa679f9b43cef77d1b390b33d8229fd99f1ee5c42a50ff1f1739229454cd",
+    "status": 1,
+    "language": "id",
+    "authors": ["Dio R"],
+    "tvTypes": ["NSFW"],
+    "version": 1,
+    "internalName": "JavtifulProvider",
+    "description": "Javtiful — Streaming JAV HD, Chinese AV, dan konten dewasa lainnya",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavtifulProvider.cs3",
+    "name": "Javtiful"
   }
 ]
