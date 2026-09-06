@@ -103,5 +103,26 @@
     "pluginClassName": "com.javseg.JavSegarProviderPlugin",
     "internalName": "JavSegarProvider",
     "allowedDomains": ["javsegar.com"]
+  },
+  {
+    "iconUrl": "https://javsek.net/wp-content/uploads/2024/02/cropped-jav-jpg.webp",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 11916,
+    "fileHash": "sha256-d0b8fbd1af4db747b3f6d9e9aa83f14b6d9d4da404e2261eb340fddae1e66f43",
+    "status": 1,
+    "name": "JavSek",
+    "description": "JavSek — JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
+    "version": 1,
+    "tags": ["adult", "jav", "NSFW", "multi-server"],
+    "authors": ["Dio R"],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.javsek.JavSekProviderPlugin",
+    "internalName": "JavSekProvider",
+    "allowedDomains": ["javsek.net"]
   }
 ]
