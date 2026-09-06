@@ -9,14 +9,8 @@
     "name": "JavHey",
     "description": "JavHey — Free JAV streaming",
     "version": 1,
-    "tags": [
-      "adult",
-      "jav",
-      "NSFW"
-    ],
-    "authors": [
-      "Dio R"
-    ],
+    "tags": ["adult", "jav", "NSFW"],
+    "authors": ["Dio R"],
     "language": "id",
     "compatibilitySdkVersion": 33,
     "advancedLog": false,
@@ -24,9 +18,7 @@
     "bundledJS": null,
     "pluginClassName": "com.javhey.JavHeyProviderPlugin",
     "internalName": "JavHeyProvider",
-    "allowedDomains": [
-      "javhey.com"
-    ]
+    "allowedDomains": ["javhey.com"]
   },
   {
     "iconUrl": "https://podjav.tv/favicon.png",
@@ -38,15 +30,8 @@
     "name": "PodJav",
     "description": "PodJav — JAV streaming with subtitle support",
     "version": 2,
-    "tags": [
-      "adult",
-      "jav",
-      "NSFW",
-      "subtitle"
-    ],
-    "authors": [
-      "Dio R"
-    ],
+    "tags": ["adult", "jav", "NSFW", "subtitle"],
+    "authors": ["Dio R"],
     "language": "id",
     "compatibilitySdkVersion": 33,
     "advancedLog": false,
@@ -54,9 +39,7 @@
     "bundledJS": null,
     "pluginClassName": "com.podjav.PodJavProviderPlugin",
     "internalName": "PodJavProvider",
-    "allowedDomains": [
-      "podjav.tv"
-    ]
+    "allowedDomains": ["podjav.tv"]
   },
   {
     "iconUrl": "https://javtiful.com/favicon.png",
@@ -68,14 +51,8 @@
     "name": "Javtiful",
     "description": "Javtiful — JAV HD streaming, Chinese AV & adult content",
     "version": 1,
-    "tags": [
-      "adult",
-      "jav",
-      "NSFW"
-    ],
-    "authors": [
-      "Dio R"
-    ],
+    "tags": ["adult", "jav", "NSFW"],
+    "authors": ["Dio R"],
     "language": "id",
     "compatibilitySdkVersion": 33,
     "advancedLog": false,
@@ -83,9 +60,7 @@
     "bundledJS": null,
     "pluginClassName": "com.javtiful.JavtifulProviderPlugin",
     "internalName": "JavtifulProvider",
-    "allowedDomains": [
-      "javtiful.com"
-    ]
+    "allowedDomains": ["javtiful.com"]
   },
   {
     "iconUrl": "https://javstory1.com/wp-content/uploads/2021/05/cropped-android-chrome-512x512-1.png",
@@ -97,15 +72,8 @@
     "name": "JavStory",
     "description": "JAVStory1 — JAV streaming with Indo & English subtitle",
     "version": 1,
-    "tags": [
-      "adult",
-      "jav",
-      "NSFW",
-      "subtitle"
-    ],
-    "authors": [
-      "Dio R"
-    ],
+    "tags": ["adult", "jav", "NSFW", "subtitle"],
+    "authors": ["Dio R"],
     "language": "id",
     "compatibilitySdkVersion": 33,
     "advancedLog": false,
@@ -113,8 +81,27 @@
     "bundledJS": null,
     "pluginClassName": "com.javstory.JavStoryProviderPlugin",
     "internalName": "JavStoryProvider",
-    "allowedDomains": [
-      "javstory1.com"
-    ]
+    "allowedDomains": ["javstory1.com"]
+  },
+  {
+    "iconUrl": "https://javsegar.com/wp-content/uploads/2022/11/GVH-089-e1667276836371.jpg",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 9043,
+    "fileHash": "sha256-5b477eaafcd571d283a84cae8683187c6f1ca0d4d314e2e8e52757fc08b8697",
+    "status": 1,
+    "name": "JavSegar",
+    "description": "JavSegar — JAV streaming with HD video",
+    "version": 1,
+    "tags": ["adult", "jav", "NSFW"],
+    "authors": ["Dio R"],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.javseg.JavSegarProviderPlugin",
+    "internalName": "JavSegarProvider",
+    "allowedDomains": ["javsegar.com"]
   }
 ]
