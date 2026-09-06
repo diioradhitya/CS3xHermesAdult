@@ -5,7 +5,7 @@
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 22542,
     "fileHash": "sha256-4a8fbf798f5707b76a928b2282043dda04e5daef5ec2d927365078ed9ed5a0b0",
-    "status": 1,
+    "status": 2,
     "name": "JavHey",
     "description": "JavHey \u2014 Free JAV streaming",
     "version": 1,
@@ -27,15 +27,18 @@
     "allowedDomains": [
       "javhey.com"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   },
   {
-    "iconUrl": "https://podjav.tv/favicon.png",
+    "iconUrl": "https://podjav.tv/wp-content/uploads/2025/02/favicon-podjav.ico",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 22748,
     "fileHash": "sha256-6014d9f24220f4181e044e12fe457dd9bcdfe17575d88af7dbf940bcba639ab3",
-    "status": 1,
+    "status": 2,
     "name": "PodJav",
     "description": "PodJav \u2014 JAV streaming with subtitle support",
     "version": 2,
@@ -58,15 +61,18 @@
     "allowedDomains": [
       "podjav.tv"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   },
   {
-    "iconUrl": "https://javtiful.com/favicon.png",
+    "iconUrl": "https://javtiful.com/uploads/site/icon/2026/04/27/new_jt_icon.png",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 15838,
-    "fileHash": "sha256-99767141b927763c626c7d04abac641dd9383a65868d3b2843983455567896c5",
-    "status": 1,
+    "fileSize": 14117,
+    "fileHash": "sha256-b3f5fa679f9b43cef77d1b390b33d8229fd99f1ee5c42a50ff1f1739229454cd",
+    "status": 2,
     "name": "Javtiful",
     "description": "Javtiful \u2014 JAV HD streaming, Chinese AV & adult content",
     "version": 1,
@@ -88,7 +94,10 @@
     "allowedDomains": [
       "javtiful.com"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavtifulProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavtifulProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   },
   {
     "iconUrl": "https://javstory1.com/wp-content/uploads/2021/05/cropped-android-chrome-512x512-1.png",
@@ -96,7 +105,7 @@
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 10600,
     "fileHash": "sha256-7f35efbfff0c13738d39602390fd0f2229532b4e3a05f2589c75bf8f9083861c",
-    "status": 1,
+    "status": 2,
     "name": "JavStory",
     "description": "JAVStory1 \u2014 JAV streaming with Indo & English subtitle",
     "version": 1,
@@ -119,7 +128,10 @@
     "allowedDomains": [
       "javstory1.com"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavStoryProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavStoryProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   },
   {
     "iconUrl": "https://javsegar.com/wp-content/uploads/2022/11/GVH-089-e1667276836371.jpg",
@@ -127,7 +139,7 @@
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 9043,
     "fileHash": "sha256-5b477eaafcd571d283a84cae8683187c6f1ca0d4d314e2e8e52757fc08b8697",
-    "status": 1,
+    "status": 2,
     "name": "JavSegar",
     "description": "JavSegar \u2014 JAV streaming with HD video",
     "version": 1,
@@ -149,7 +161,10 @@
     "allowedDomains": [
       "javsegar.com"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSegarProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSegarProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   },
   {
     "iconUrl": "https://javsek.net/wp-content/uploads/2024/02/cropped-jav-jpg.webp",
@@ -157,7 +172,7 @@
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 11916,
     "fileHash": "sha256-d0b8fbd1af4db747b3f6d9e9aa83f14b6d9d4da404e2261eb340fddae1e66f43",
-    "status": 1,
+    "status": 2,
     "name": "JavSek",
     "description": "JavSek \u2014 JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
     "version": 1,
@@ -180,6 +195,9 @@
     "allowedDomains": [
       "javsek.net"
     ],
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSekProvider.cs3"
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSekProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   }
 ]
