@@ -3,7 +3,6 @@ package com.javseg
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
-
 class JavSegarProvider : MainAPI() {
     override var mainUrl = "https://javsegar.com"
     override var name = "JavSegar"
@@ -67,6 +66,14 @@ class JavSegarProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         if (data.isBlank()) return false
-        return loadExtractor(data, data, subtitleCallback, callback)
+
+        return when {
+            // ystream.id embed: handle with PoW-protected extractor
+            data.contains("ystream.id") -> {
+                YstreamExtractor().getUrl(data, data, subtitleCallback, callback)
+                true
+            }
+            else -> loadExtractor(data, data, subtitleCallback, callback)
+        }
     }
 }
