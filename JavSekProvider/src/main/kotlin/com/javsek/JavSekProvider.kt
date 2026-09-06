@@ -49,14 +49,16 @@ class JavSekProvider : MainAPI() {
         val tags = doc.select(".tags-links a, .tagcloud a, .post-tags a").map { it.text().trim() }
         val duration = doc.selectFirst(".gmr-format, .video-duration")?.text()?.trim() ?: ""
 
-        // Get server tabs
-        val playerTabs = doc.select("#dropdown-container .player-tabs li a")
+        // Get server tabs — note: #dropdown-container IS .player-tabs (same element)
+        val playerTabs = doc.select("#dropdown-container.player-tabs li a, div.player-tabs li a")
         val serverUrlMap = mutableListOf<Pair<String, String>>()
         for (tab in playerTabs) {
             val href = tab.attr("href")
             val name = tab.text()
             if (href.isNotBlank()) {
-                serverUrlMap.add(name to href)
+                // Resolve relative hrefs like "/post-slug/?player=1" to absolute
+                val full = if (href.startsWith("http")) href else "$mainUrl$href"
+                serverUrlMap.add(name to full)
             }
         }
 
