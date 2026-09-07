@@ -3,7 +3,7 @@ version = 1
 cloudstream {
     authors     = listOf("Dio R")
     language    = "id"
-    description = "AVTub — Indonesian adult streaming with HD video"
+    description = "AVTube — Indonesian adult streaming with HD video"
 
     /**
      * Status int as string: "1" = beta, "2" = working, "3" = broken

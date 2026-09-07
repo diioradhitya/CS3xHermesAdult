@@ -1,4 +1,4 @@
-package com.awtub
+package com.avtube
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -7,9 +7,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.jsoup.nodes.Element
 
-class AWTubProvider : MainAPI() {
+class AVTubeProvider : MainAPI() {
     override var mainUrl = "https://avtubreal.com"
-    override var name = "AVTub"
+    override var name = "AVTube"
     override val hasMainPage = true
     override var lang = "id"
     override val supportedTypes = setOf(TvType.NSFW)

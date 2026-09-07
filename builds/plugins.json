@@ -201,16 +201,16 @@
         ]
     },
     {
-        "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AWTubProvider.cs3",
+        "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
         "status": 2,
         "version": 1,
-        "name": "AVTub",
-        "internalName": "AWTubProvider",
+        "name": "AVTube",
+        "internalName": "AVTubeProvider",
         "authors": [
             "Dio R"
         ],
-        "description": "AVTub - Indonesian adult streaming with HD video",
-        "fileSize": 15616,
+        "description": "AVTube - Indonesian adult streaming with HD video",
+        "fileSize": 15608,
         "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
         "language": "id",
         "tvTypes": [
@@ -218,6 +218,6 @@
         ],
         "iconUrl": "",
         "apiVersion": 2,
-        "fileHash": "sha256-1d7b4261468bf6bf63d3eeb7604336bb6d523c20453ba74e759b27b35971e54d"
+        "fileHash": "sha256-f189df825ac7b79b25b1f2ba9b8aeda3942e583ad1c68c5f8b660dac7908258e"
     }
 ]

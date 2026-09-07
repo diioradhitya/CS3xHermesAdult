@@ -1,12 +1,12 @@
-package com.awtub
+package com.avtube
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
 
 @CloudstreamPlugin
-class AWTubProviderPlugin : Plugin() {
+class AVTubeProviderPlugin : Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(AWTubProvider())
+        registerMainAPI(AVTubeProvider())
     }
 }

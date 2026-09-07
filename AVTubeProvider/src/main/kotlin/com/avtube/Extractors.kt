@@ -1,4 +1,4 @@
-package com.awtub
+package com.avtube
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
