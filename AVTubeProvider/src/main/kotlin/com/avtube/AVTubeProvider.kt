@@ -106,13 +106,24 @@ class AVTubeProvider : MainAPI() {
         if (iframeSrc.isNullOrBlank()) return@coroutineScope false
 
         val morenciusDomains = listOf("morencius.com", "dingtezuni.com", "mivalyo.com", "ryderjet.com", "bingezove.com", "movearnpre.com")
-        val fixedUrl = if (morenciusDomains.any { iframeSrc.contains(it) }) {
-            iframeSrc.replace(Regex("https?://[^/]+"), "https://morencius.com")
-        } else iframeSrc
+        val ystreamDomains = listOf("ystream.id", "f7hyg4q.org")
+
+        val isMorencius = morenciusDomains.any { iframeSrc.contains(it) }
+        val isYstream = ystreamDomains.any { iframeSrc.contains(it) }
+
+        val fixedUrl = when {
+            isMorencius -> iframeSrc.replace(Regex("https?://[^/]+"), "https://morencius.com")
+            isYstream -> iframeSrc.replace(Regex("https?://[^/]+"), "https://ystream.id")
+            else -> iframeSrc
+        }
 
         launch(Dispatchers.IO) {
             try {
-                Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
+                when {
+                    isYstream -> YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
+                    isMorencius -> Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
+                    else -> loadExtractor(fixedUrl, data, subtitleCallback, callback)
+                }
             } catch (e: Exception) {
                 kotlin.runCatching { e.printStackTrace() }
             }
