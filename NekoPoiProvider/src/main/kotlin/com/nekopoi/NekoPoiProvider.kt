@@ -78,18 +78,28 @@ class NekoPoiProvider : MainAPI() {
             "Referer" to mainUrl
         )
         val document = app.get(url, headers = headers).document
-        val title = document.selectFirst("h1, h2, .entry-title")?.text()?.trim() ?: return null
-        val description = document.selectFirst(".entry-content, .nk-entry-content, .summary, .konten")?.text()?.trim()
-        val poster = document.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img, .nk-featured-img img, .wp-post-image")?.attr("abs:src")
-        val genres = document.select(".genre a, .nk-genre a, .tags a, .nk-tags a").map { it.text().trim() }.filter { it.isNotBlank() }
-        // Fallback: try to extract from text containing "Genre :"
+        // Try multiple selectors for title - ensure we get the main article title
+        val title = document.selectFirst("div.nk-article h1, div.nk-post-header h1, h1, h2, .entry-title")?.text()?.trim() ?: return null
+        
+        // Get description from multiple possible locations
+        val description = document.selectFirst(".konten, .entry-content, .nk-entry-content, .summary, .nk-post-body")?.text()?.trim()
+        
+        // Get poster image - try featured image first, then other selectors
+        val poster = document.selectFirst(".nk-featured-img img, .poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img, .wp-post-image")?.attr("abs:src")
+        
+        // Get genres from multiple possible locations
+        val genres = document.select(".genre a, .nk-genre a, .tags a, .nk-tags a, .nk-search-info h2, .nk-post-meta h2 a").map { it.text().trim() }.filter { it.isNotBlank() }
+        
+        // Fallback: try to extract from text containing "Genre :" or "GENRE :"
         val fallbackGenres = if (genres.isEmpty()) {
-            val genreText = document.select(".separator:contains(Gene)").firstOrNull()?.text()?.removePrefix("Genre :")?.trim()
-            genreText?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            val genreText = document.select("p:containsOwn(Genre), p:containsOwn(GENRE)").firstOrNull()?.text()
+                ?.replace(Regex("(?i)\\bgenre\\s*:"), "")?.trim()
+            genreText?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.take(5) ?: emptyList()
         } else {
             emptyList()
         }
         val allGenres = (genres + fallbackGenres).distinct().take(5)
+        
         // NekoPoi detail page doesn't have episode list; it's a single episode page with multiple player options.
         // We'll store the URL itself as data for loadLinks to reuse.
         return newMovieLoadResponse(title, url, TvType.NSFW, data = url) {
