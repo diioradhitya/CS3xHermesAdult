@@ -78,8 +78,8 @@ class NekoPoiProvider : MainAPI() {
             "Referer" to mainUrl
         )
         val document = app.get(url, headers = headers).document
-        // Try multiple selectors for title - ensure we get the main article title
-        val title = document.selectFirst("div.nk-article h1, div.nk-post-header h1, h1, h2, .entry-title")?.text()?.trim() ?: return null
+        // Try multiple selectors for title - ensure we get the main article title (h1 only, skip h2 "Direkomendasikan")
+        val title = document.selectFirst("div.nk-article h1, div.nk-post-header h1, h1, .entry-title")?.text()?.trim() ?: return null
         
         // Get description from multiple possible locations
         val description = document.selectFirst(".konten, .entry-content, .nk-entry-content, .summary, .nk-post-body")?.text()?.trim()
