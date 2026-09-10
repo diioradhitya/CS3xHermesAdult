@@ -8,5 +8,7 @@ import android.content.Context
 class NekoPoiProviderPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(NekoPoiProvider())
+        registerExtractorAPI(Playmogo())
+        registerExtractorAPI(Streampoi())
     }
 }
