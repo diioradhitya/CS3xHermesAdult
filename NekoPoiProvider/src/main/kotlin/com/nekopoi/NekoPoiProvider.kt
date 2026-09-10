@@ -39,7 +39,7 @@ class NekoPoiProvider : MainAPI() {
         val title = selectFirst(".nk-search-info h2, .nk-post-meta h2 a, h2")?.text()?.trim() ?: return null
 
         val poster = selectFirst(".nk-search-thumb, .nk-thumb-crop, div[style]")?.attr("style")?.let { style ->
-            Regex("""url\(['"]?([^'"]+?)['"]?\)""").find(style)?.groupValues?.get(1)
+            Regex("""url\(['\"]?([^'\"]+?)['\"]?\)""").find(style)?.groupValues?.get(1)
         }
 
         return newMovieSearchResponse(title, href, TvType.NSFW) {
@@ -79,15 +79,23 @@ class NekoPoiProvider : MainAPI() {
         )
         val document = app.get(url, headers = headers).document
         val title = document.selectFirst("h1, h2, .entry-title")?.text()?.trim() ?: return null
-        val description = document.selectFirst(".entry-content, .nk-entry-content, .summary")?.text()?.trim()
-        val poster = document.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img")?.attr("abs:src")
+        val description = document.selectFirst(".entry-content, .nk-entry-content, .summary, .konten")?.text()?.trim()
+        val poster = document.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img, .nk-featured-img img, .wp-post-image")?.attr("abs:src")
         val genres = document.select(".genre a, .nk-genre a, .tags a, .nk-tags a").map { it.text().trim() }.filter { it.isNotBlank() }
+        // Fallback: try to extract from text containing "Genre :"
+        val fallbackGenres = if (genres.isEmpty()) {
+            val genreText = document.select(".separator:contains(Gene)").firstOrNull()?.text()?.removePrefix("Genre :")?.trim()
+            genreText?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        } else {
+            emptyList()
+        }
+        val allGenres = (genres + fallbackGenres).distinct().take(5)
         // NekoPoi detail page doesn't have episode list; it's a single episode page with multiple player options.
         // We'll store the URL itself as data for loadLinks to reuse.
         return newMovieLoadResponse(title, url, TvType.NSFW, data = url) {
             this.posterUrl = poster
             this.plot = description
-            if (genres.isNotEmpty()) this.tags = genres.take(5)
+            if (allGenres.isNotEmpty()) this.tags = allGenres
         }
     }
 
