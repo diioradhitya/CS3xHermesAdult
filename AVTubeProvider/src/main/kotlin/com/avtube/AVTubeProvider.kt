@@ -27,13 +27,13 @@ class AVTubeProvider : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        "$mainUrl/page=" to "Latest Update",
-        "$mainUrl/category/bokep-indo/page=" to "Bokep Indo",
-        "$mainUrl/category/bokep-jilbab/page=" to "Bokep Jilbab"
+        "$mainUrl/" to "Latest Update",
+        "$mainUrl/category/bokep-indo/" to "Bokep Indo",
+        "$mainUrl/category/bokep-jilbab/" to "Bokep Jilbab"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page == 1) request.data.removeSuffix("/page=") else "${request.data}$page"
+        val url = if (page == 1) request.data else "${request.data}page/$page/"
         val document = app.get(url, headers = headers).document
 
         val home = document.select("article.thumb-block.video-preview-item").mapNotNull { it.toSearchResult() }

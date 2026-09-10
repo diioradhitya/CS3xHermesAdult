@@ -7,7 +7,7 @@
     "fileHash": "sha256-4a8fbf798f5707b76a928b2282043dda04e5daef5ec2d927365078ed9ed5a0b0",
     "status": 2,
     "name": "JavHey",
-    "description": "JavHey — Free JAV streaming",
+    "description": "JavHey \u2014 Free JAV streaming",
     "version": 1,
     "tags": [
       "adult",
@@ -40,7 +40,7 @@
     "fileHash": "sha256-6014d9f24220f4181e044e12fe457dd9bcdfe17575d88af7dbf940bcba639ab3",
     "status": 2,
     "name": "PodJav",
-    "description": "PodJav — JAV streaming with subtitle support",
+    "description": "PodJav \u2014 JAV streaming with subtitle support",
     "version": 2,
     "tags": [
       "adult",
@@ -74,7 +74,7 @@
     "fileHash": "sha256-b3f5fa679f9b43cef77d1b390b33d8229fd99f1ee5c42a50ff1f1739229454cd",
     "status": 2,
     "name": "Javtiful",
-    "description": "Javtiful — JAV HD streaming, Chinese AV & adult content",
+    "description": "Javtiful \u2014 JAV HD streaming, Chinese AV & adult content",
     "version": 1,
     "tags": [
       "adult",
@@ -107,7 +107,7 @@
     "fileHash": "sha256-7f35efbfff0c13738d39602390fd0f2229532b4e3a05f2589c75bf8f9083861c",
     "status": 2,
     "name": "JavStory",
-    "description": "JAVStory1 — JAV streaming with Indo & English subtitle",
+    "description": "JAVStory1 \u2014 JAV streaming with Indo & English subtitle",
     "version": 1,
     "tags": [
       "adult",
@@ -141,7 +141,7 @@
     "fileHash": "sha256-5b477eaafcd571d283a84cae8683187c6f1fca0d4d314e2e8e52757fc08b8697",
     "status": 2,
     "name": "JavSegar",
-    "description": "JavSegar — JAV streaming with HD video",
+    "description": "JavSegar \u2014 JAV streaming with HD video",
     "version": 2,
     "tags": [
       "adult",
@@ -174,7 +174,7 @@
     "fileHash": "sha256-493374ed72eeba73f07c208bd5aa85c2a94f7077c4dbbd3559331fe21bce91bf",
     "status": 2,
     "name": "JavSek",
-    "description": "JavSek — JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
+    "description": "JavSek \u2014 JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
     "version": 2,
     "tags": [
       "adult",
@@ -203,14 +203,14 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 2,
+    "version": 3,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
       "Dio R"
     ],
     "description": "AVTube - Indonesian adult streaming with HD video",
-    "fileSize": 29992,
+    "fileSize": 30000,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "language": "id",
     "tvTypes": [
@@ -218,7 +218,7 @@
     ],
     "iconUrl": "",
     "apiVersion": 2,
-    "fileHash": "sha256-51e0e9faa82bd5335c743c7093bfc8a1ab0a367d71f818682794d30a3164f3b7"
+    "fileHash": "sha256-e04c14094c127d33118e46c9fbbd2dd61b959df2c3849b149f58232ace69cd13"
   },
   {
     "iconUrl": "https://nekopoi.care/wp-content/uploads/2022/07/favicon.png",
@@ -228,7 +228,7 @@
     "fileHash": "sha256-0ba88e2121f619fabb1d8a48fce5489a36f80385b16f9480781932fd7d762fdb",
     "status": 2,
     "name": "NekoPoi",
-    "description": "NekoPoi — Hentai Subtitle Indonesia",
+    "description": "NekoPoi \u2014 Hentai Subtitle Indonesia",
     "version": 5,
     "tags": [
       "adult",
