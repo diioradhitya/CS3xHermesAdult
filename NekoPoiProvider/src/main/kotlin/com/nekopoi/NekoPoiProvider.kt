@@ -25,6 +25,28 @@ class NekoPoiProvider : MainAPI() {
         "$mainUrl/category/jav-cosplay/" to "JAV Cosplay"
     )
 
+    /**
+     * Parse one search/card item. Handles both site layouts:
+     * 1. Category/search: <li> > <a.nk-search-item> > (.nk-search-thumb[style] + .nk-search-info>h2)
+     * 2. Home / recent:   <div.nk-post-card> > (.nk-thumb-crop[style] + .nk-post-meta>h2>a)
+     * Posters are inline style background-image, NOT <img>.
+     */
+    private fun Element.parseCard(): SearchResponse? {
+        val linkEl = selectFirst("a[href]") ?: return null
+        val href = linkEl.attr("abs:href")
+        if (href.isBlank()) return null
+
+        val title = selectFirst(".nk-search-info h2, .nk-post-meta h2 a, h2")?.text()?.trim() ?: return null
+
+        val poster = selectFirst(".nk-search-thumb, .nk-thumb-crop, div[style]")?.attr("style")?.let { style ->
+            Regex("""url\(['"]?([^'"]+?)['"]?\)""").find(style)?.groupValues?.get(1)
+        }
+
+        return newMovieSearchResponse(title, href, TvType.NSFW) {
+            this.posterUrl = poster
+        }
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) {
             request.data
@@ -32,58 +54,28 @@ class NekoPoiProvider : MainAPI() {
             "${request.data.removeSuffix("/")}/page/$page/"
         }
         val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        val items = doc.select("div.nk-post-card, div.nk-hentai-grid ul li, div.result ul li, article").mapNotNull { it ->
-            val titleEl = it.selectFirst("h2, h3, .entry-title a, .nk-post-title a")
-            val title = titleEl?.text()?.trim() ?: return@mapNotNull null
-            val linkEl = it.selectFirst("a[href]")
-            val href = linkEl?.attr("abs:href") ?: return@mapNotNull null
-            val posterEl = it.selectFirst("img[data-src], img[src]")
-            val poster = posterEl?.attr("abs:data-src") ?: posterEl?.attr("abs:src")
-            newMovieSearchResponse(title, href, TvType.NSFW) {
-                this.posterUrl = poster
-            }
-        }
+        val items = doc.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=${URLEncoder.encode(query, "UTF-8")}&post_type=anime"
+        val url = "$mainUrl/?s=" + URLEncoder.encode(query, "UTF-8") + "&post_type=anime"
         val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        return doc.select("div.nk-post-card, div.nk-hentai-grid ul li, div.result ul li").mapNotNull { it ->
-            val titleEl = it.selectFirst("h2, h3, .entry-title a, .nk-post-title a")
-            val title = titleEl?.text()?.trim() ?: return@mapNotNull null
-            val linkEl = it.selectFirst("a[href]")
-            val href = linkEl?.attr("abs:href") ?: return@mapNotNull null
-            val posterEl = it.selectFirst("img[data-src], img[src]")
-            val poster = posterEl?.attr("abs:data-src") ?: posterEl?.attr("abs:src")
-            newMovieSearchResponse(title, href, TvType.NSFW) {
-                this.posterUrl = poster
-            }
-        }
+        return doc.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        val title = doc.selectFirst("h1.entry-title, h1, .entry-title")?.text()?.trim()
-        val poster = doc.selectFirst("meta[property=og:image]")?.attr("abs:content")
-            ?: doc.selectFirst("img[src]")?.attr("abs:src")
-        val description = doc.selectFirst("meta[property=og:description]")?.attr("content")
-            ?: doc.selectFirst(".entry-content p")?.text()?.takeIf { it.isNotBlank() }
-        val genres = doc.select(".tags-links a, .tagcloud a, .post-tags a, .genre").map { it.text().trim() }
-        // Episodes
-        val episodes = doc.select("ul.episodelist li a, div.episodelist a, div.nk-episode-card a").mapNotNull { el ->
-            val href = el.attr("abs:href")
-            val name = el.text().trim()
-            if (href.isNotBlank() && name.isNotBlank()) {
-                newEpisode(href) { this.name = name }
-            } else null
-        }
-        if (title == null || title.isBlank()) return null
-        return newAnimeLoadResponse(title, url, TvType.NSFW) {
+        val title = doc.selectFirst("h1, h2, .entry-title")?.text()?.trim() ?: return null
+        val description = doc.selectFirst(".entry-content, .nk-entry-content, .summary")?.text()?.trim()
+        val poster = doc.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img")?.attr("abs:src")
+        val genres = doc.select(".genre a, .nk-genre a, .tags a, .nk-tags a").map { it.text().trim() }.filter { it.isNotBlank() }
+        // NekoPoi detail page doesn't have episode list; it's a single episode page with multiple player options.
+        // We'll store the URL itself as data for loadLinks to reuse.
+        return newMovieLoadResponse(title, url, TvType.NSFW, data = url) {
             this.posterUrl = poster
             this.plot = description
             if (genres.isNotEmpty()) this.tags = genres.take(5)
-            addEpisodes(DubStatus.Subbed, episodes)
         }
     }
 
@@ -93,32 +85,17 @@ class NekoPoiProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = Jsoup.connect(data).userAgent(userAgent).get()
-        // Look for iframes
-        val iframes = doc.select("iframe[src]")
-        if (iframes.isNotEmpty()) {
-            for (iframe in iframes) {
-                val src = iframe.attr("abs:src")
-                if (src.isNotBlank()) {
-                    // Use CloudStream's built-in extractor for the iframe src
-                    loadExtractor(src, "$mainUrl/", subtitleCallback) { link ->
-                        callback.invoke(link)
-                    }
-                }
-            }
-            return true
-        }
-        // If no iframe, try to look for video tag directly
-        val video = doc.selectFirst("video[src], source[src]")
-        if (video != null) {
-            val src = video.attr("abs:src")
-            if (src.isNotBlank()) {
-                loadExtractor(src, "$mainUrl/", subtitleCallback) { link ->
-                    callback.invoke(link)
-                }
-                return true
+        val episodeUrl = data
+        val doc = Jsoup.connect(episodeUrl).userAgent(userAgent).get()
+        // Only player iframes (skip ad/discord/widget frames)
+        val playerHosts = listOf("playmogo", "streampoi", "dood", "streamruby", "embed", "ystream", "cdn")
+        doc.select("iframe[src]").forEach { iframe ->
+            val src = iframe.attr("abs:src")
+            if (src.isNotBlank() && playerHosts.any { src.contains(it, ignoreCase = true) }) {
+                // Referer can be the episode URL or mainUrl; we'll use episodeUrl as referer for safety.
+                loadExtractor(src, episodeUrl, subtitleCallback, callback)
             }
         }
-        return false
+        return true
     }
 }
