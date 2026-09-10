@@ -53,23 +53,35 @@ class NekoPoiProvider : MainAPI() {
         } else {
             "${request.data.removeSuffix("/")}/page/$page/"
         }
-        val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        val items = doc.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
+        val headers = mapOf(
+            "User-Agent" to userAgent,
+            "Referer" to mainUrl
+        )
+        val document = app.get(url, headers = headers).document
+        val items = document.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val url = "$mainUrl/?s=" + URLEncoder.encode(query, "UTF-8") + "&post_type=anime"
-        val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        return doc.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
+        val headers = mapOf(
+            "User-Agent" to userAgent,
+            "Referer" to mainUrl
+        )
+        val document = app.get(url, headers = headers).document
+        return document.select("div.nk-search-results ul li, div.nk-post-card").mapNotNull { it.parseCard() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = Jsoup.connect(url).userAgent(userAgent).get()
-        val title = doc.selectFirst("h1, h2, .entry-title")?.text()?.trim() ?: return null
-        val description = doc.selectFirst(".entry-content, .nk-entry-content, .summary")?.text()?.trim()
-        val poster = doc.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img")?.attr("abs:src")
-        val genres = doc.select(".genre a, .nk-genre a, .tags a, .nk-tags a").map { it.text().trim() }.filter { it.isNotBlank() }
+        val headers = mapOf(
+            "User-Agent" to userAgent,
+            "Referer" to mainUrl
+        )
+        val document = app.get(url, headers = headers).document
+        val title = document.selectFirst("h1, h2, .entry-title")?.text()?.trim() ?: return null
+        val description = document.selectFirst(".entry-content, .nk-entry-content, .summary")?.text()?.trim()
+        val poster = document.selectFirst(".poster img, .nk-poster-img, .thumb img, .entry-content img, .nk-entry-content img")?.attr("abs:src")
+        val genres = document.select(".genre a, .nk-genre a, .tags a, .nk-tags a").map { it.text().trim() }.filter { it.isNotBlank() }
         // NekoPoi detail page doesn't have episode list; it's a single episode page with multiple player options.
         // We'll store the URL itself as data for loadLinks to reuse.
         return newMovieLoadResponse(title, url, TvType.NSFW, data = url) {
@@ -86,10 +98,14 @@ class NekoPoiProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val episodeUrl = data
-        val doc = Jsoup.connect(episodeUrl).userAgent(userAgent).get()
+        val headers = mapOf(
+            "User-Agent" to userAgent,
+            "Referer" to episodeUrl
+        )
+        val document = app.get(episodeUrl, headers = headers).document
         // Only player iframes (skip ad/discord/widget frames)
         val playerHosts = listOf("playmogo", "streampoi", "dood", "streamruby", "embed", "ystream", "cdn")
-        doc.select("iframe[src]").forEach { iframe ->
+        document.select("iframe[src]").forEach { iframe ->
             val src = iframe.attr("abs:src")
             if (src.isNotBlank() && playerHosts.any { src.contains(it, ignoreCase = true) }) {
                 // Referer can be the episode URL or mainUrl; we'll use episodeUrl as referer for safety.
