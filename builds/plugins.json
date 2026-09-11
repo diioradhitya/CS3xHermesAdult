@@ -203,21 +203,21 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 4,
+    "version": 5,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
       "Dio R"
     ],
     "description": "AVTube - Indonesian adult streaming with HD video",
-    "fileSize": 30000,
+    "fileSize": 36142,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "language": "id",
     "tvTypes": [
       "NSFW"
     ],
-    "iconUrl": "",
-    "apiVersion": 2,
+    "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
+    "apiVersion": 1,
     "fileHash": "sha256-e04c14094c127d33118e46c9fbbd2dd61b959df2c3849b149f58232ace69cd13"
   },
   {
