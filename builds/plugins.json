@@ -137,12 +137,12 @@
     "iconUrl": "https://javsegar.com/wp-content/uploads/2022/11/GVH-089-e1667276836371.jpg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 30579,
-    "fileHash": "sha256-87aa7d3cc1a4fa96a9b0edf0a86bba3096102c6617479aab6ba80e06eedc2abe",
+    "fileSize": 31224,
+    "fileHash": "sha256-43ae031bb5be58bd28d2ec7664f272533966c5762c94cc44c71a80e3cde88c12",
     "status": 2,
     "name": "JavSegar",
     "description": "JavSegar \u2014 JAV streaming with HD video",
-    "version": 3,
+    "version": 4,
     "tags": [
       "adult",
       "jav",
@@ -203,14 +203,14 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 5,
+    "version": 6,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
       "Dio R"
     ],
     "description": "AVTube - Indonesian adult streaming with HD video",
-    "fileSize": 36142,
+    "fileSize": 36920,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "language": "id",
     "tvTypes": [
@@ -218,7 +218,7 @@
     ],
     "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-10114ff115dd9bb9d273b9a9040f6a0fe3863944953a40b68707a1de90e07e74"
+    "fileHash": "sha256-dd8698b5a9d1001e4d1fceae6e15a014476796d769a785769b1ccaffbdab4971"
   },
   {
     "iconUrl": "https://nekopoi.care/wp-content/uploads/2022/07/favicon.png",
