@@ -142,7 +142,7 @@
     "status": 2,
     "name": "JavSegar",
     "description": "JavSegar \u2014 JAV streaming with HD video",
-    "version": 2,
+    "version": 3,
     "tags": [
       "adult",
       "jav",
@@ -203,7 +203,7 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 3,
+    "version": 4,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
