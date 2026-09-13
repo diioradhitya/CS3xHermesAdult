@@ -26,116 +26,141 @@ class JavHdProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         // ── Main Sort Pages ──
-        "$mainUrl/en/japanese-porn-videos/justadded/all/page=" to "Just Added",
-        "$mainUrl/en/japanese-porn-videos/popular/all/page=" to "Most Popular",
-        "$mainUrl/en/japanese-porn-videos/toprated/all/page=" to "Top Rated",
-        "$mainUrl/en/japanese-porn-videos-long/justadded/all/page=" to "Long Videos",
-        "$mainUrl/en/sex-categories/uncensored/page=" to "Uncensored",
-        "$mainUrl/en/sex-categories/premium/page=" to "Premium",
+        "$mainUrl/en/japanese-porn-videos/justadded/all/" to "Just Added",
+        "$mainUrl/en/japanese-porn-videos/popular/all/" to "Most Popular",
+        "$mainUrl/en/japanese-porn-videos/top/all/" to "Top Rated",
+        "$mainUrl/en/japanese-porn-videos-long/justadded/all/" to "Long Videos",
 
-        // ── Categories (justadded sort) ──
-        "$cat/adorable/justadded/all/page=" to "Adorable",
-        "$cat/adultery/justadded/all/page=" to "Adultery",
-        "$cat/amateur/justadded/all/page=" to "Amateur",
-        "$cat/anal/justadded/all/page=" to "Anal",
-        "$cat/asian/justadded/all/page=" to "Asian",
-        "$cat/bdsm/justadded/all/page=" to "BDSM",
-        "$cat/beach/justadded/all/page=" to "Beach",
-        "$cat/beauty/justadded/all/page=" to "Beauty",
-        "$cat/bikini/justadded/all/page=" to "Bikini",
-        "$cat/bisexual/justadded/all/page=" to "Bisexual",
-        "$cat/blowjob/justadded/all/page=" to "Blowjob",
-        "$cat/bondage/justadded/all/page=" to "Bondage",
-        "$cat/bukkake/justadded/all/page=" to "Bukkake",
-        "$cat/busty/justadded/all/page=" to "Busty",
-        "$cat/cosplay/justadded/all/page=" to "Cosplay",
-        "$cat/creampie/justadded/all/page=" to "Creampie",
-        "$cat/cumswapping/justadded/all/page=" to "Cum Swapping",
-        "$cat/doggystyle/justadded/all/page=" to "Doggystyle",
-        "$cat/facial/justadded/all/page=" to "Facial",
-        "$cat/gangbang/justadded/all/page=" to "Gangbang",
-        "$cat/group/justadded/all/page=" to "Group",
-        "$cat/handjob/justadded/all/page=" to "Handjob",
-        "$cat/hardcore/justadded/all/page=" to "Hardcore",
-        "$cat/hospital/justadded/all/page=" to "Hospital",
-        "$cat/interracial/justadded/all/page=" to "Interracial",
-        "$cat/kissing/justadded/all/page=" to "Kissing",
-        "$cat/latex/justadded/all/page=" to "Latex",
-        "$cat/lesbian/justadded/all/page=" to "Lesbian",
-        "$cat/lingerie/justadded/all/page=" to "Lingerie",
-        "$cat/maid/justadded/all/page=" to "Maid",
-        "$cat/massage/justadded/all/page=" to "Massage",
-        "$cat/masturbation/justadded/all/page=" to "Masturbation",
-        "$cat/mature/justadded/all/page=" to "Mature",
-        "$cat/medical/justadded/all/page=" to "Medical",
-        "$cat/milf/justadded/all/page=" to "MILF",
-        "$cat/miniskirt/justadded/all/page=" to "Miniskirt",
-        "$cat/missionary/justadded/all/page=" to "Missionary",
-        "$cat/mistress/justadded/all/page=" to "Mistress",
-        "$cat/mmf/justadded/all/page=" to "MMF",
-        "$cat/natural/justadded/all/page=" to "Natural",
-        "$cat/naughty/justadded/all/page=" to "Naughty",
-        "$cat/nipples/justadded/all/page=" to "Nipples",
-        "$cat/nurse/justadded/all/page=" to "Nurse",
-        "$cat/office/justadded/all/page=" to "Office",
-        "$cat/outdoor/justadded/all/page=" to "Outdoor",
-        "$cat/panties/justadded/all/page=" to "Panties",
-        "$cat/party/justadded/all/page=" to "Party",
-        "$cat/passionate/justadded/all/page=" to "Passionate",
-        "$cat/pegging/justadded/all/page=" to "Pegging",
-        "$cat/piercing/justadded/all/page=" to "Piercing",
-        "$cat/pool/justadded/all/page=" to "Pool",
-        "$cat/pornstar/justadded/all/page=" to "Pornstar",
-        "$cat/pov/justadded/all/page=" to "POV",
-        "$cat/pregnant/justadded/all/page=" to "Pregnant",
-        "$cat/princess/justadded/all/page=" to "Princess",
-        "$cat/prison/justadded/all/page=" to "Prison",
-        "$cat/public/justadded/all/page=" to "Public",
-        "$cat/reality/justadded/all/page=" to "Reality",
-        "$cat/redhead/justadded/all/page=" to "Redhead",
-        "$cat/riding/justadded/all/page=" to "Riding",
-        "$cat/romantic/justadded/all/page=" to "Romantic",
-        "$cat/sauna/justadded/all/page=" to "Sauna",
-        "$cat/school/justadded/all/page=" to "School",
-        "$cat/secretary/justadded/all/page=" to "Secretary",
-        "$cat/sensual/justadded/all/page=" to "Sensual",
-        "$cat/shaved/justadded/all/page=" to "Shaved",
-        "$cat/skinny/justadded/all/page=" to "Skinny",
-        "$cat/softcore/justadded/all/page=" to "Softcore",
-        "$cat/solo/justadded/all/page=" to "Solo",
-        "$cat/spanking/justadded/all/page=" to "Spanking",
-        "$cat/squirting/justadded/all/page=" to "Squirting",
-        "$cat/stockings/justadded/all/page=" to "Stockings",
-        "$cat/strip/justadded/all/page=" to "Strip",
-        "$cat/student/justadded/all/page=" to "Student",
-        "$cat/submissive/justadded/all/page=" to "Submissive",
-        "$cat/sucking/justadded/all/page=" to "Sucking",
-        "$cat/swallowing/justadded/all/page=" to "Swallowing",
-        "$cat/swimsuit/justadded/all/page=" to "Swimsuit",
-        "$cat/tattoo/justadded/all/page=" to "Tattoo",
-        "$cat/teacher/justadded/all/page=" to "Teacher",
-        "$cat/teen/justadded/all/page=" to "Teen",
-        "$cat/threesome/justadded/all/page=" to "Threesome",
-        "$cat/toilet/justadded/all/page=" to "Toilet",
-        "$cat/toys/justadded/all/page=" to "Toys",
-        "$cat/trans/justadded/all/page=" to "Trans",
-        "$cat/trimmed/justadded/all/page=" to "Trimmed",
-        "$cat/uncensored/justadded/all/page=" to "Uncensored (Cat)",
-        "$cat/uniform/justadded/all/page=" to "Uniform",
-        "$cat/upskirt/justadded/all/page=" to "Upskirt",
-        "$cat/vibrator/justadded/all/page=" to "Vibrator",
-        "$cat/webcam/justadded/all/page=" to "Webcam",
-        "$cat/wedding/justadded/all/page=" to "Wedding",
-        "$cat/wet/justadded/all/page=" to "Wet",
-        "$cat/whip/justadded/all/page=" to "Whip",
-        "$cat/wife/justadded/all/page=" to "Wife",
-        "$cat/wrestling/justadded/all/page=" to "Wrestling",
-        "$cat/yoga/justadded/all/page=" to "Yoga"
+        // ── Top Categories (by scene count, correct slugs from javhd.com) ──
+        "$cat/blowjob/justadded/all/" to "Blowjob",
+        "$cat/hardcore/justadded/all/" to "Hardcore",
+        "$cat/missionary/justadded/all/" to "Missionary",
+        "$cat/doggystyle/justadded/all/" to "Doggystyle",
+        "$cat/handjob/justadded/all/" to "Handjob",
+        "$cat/fingering/justadded/all/" to "Fingering",
+        "$cat/riding/justadded/all/" to "Riding",
+        "$cat/brunette/justadded/all/" to "Brunette",
+        "$cat/small-tits/justadded/all/" to "Small Tits",
+        "$cat/lingerie/justadded/all/" to "Lingerie",
+        "$cat/hairy-pussy/justadded/all/" to "Hairy Pussy",
+        "$cat/big-tits/justadded/all/" to "Big Tits",
+        "$cat/creampie/justadded/all/" to "Creampie",
+        "$cat/toys/justadded/all/" to "Toys",
+        "$cat/shaved-pussy/justadded/all/" to "Shaved Pussy",
+        "$cat/cumshot/justadded/all/" to "Cumshot",
+        "$cat/natural-tits/justadded/all/" to "Natural Tits",
+        "$cat/vibrator/justadded/all/" to "Vibrator",
+        "$cat/panties/justadded/all/" to "Panties",
+        "$cat/pussy-licking/justadded/all/" to "Pussy Licking",
+        "$cat/reverse-cowgirl/justadded/all/" to "Reverse Cowgirl",
+        "$cat/cunnilingus/justadded/all/" to "Cunnilingus",
+        "$cat/milf/justadded/all/" to "MILF",
+        "$cat/amateur/justadded/all/" to "Amateur",
+        "$cat/trimmed-pussy/justadded/all/" to "Trimmed Pussy",
+        "$cat/pov/justadded/all/" to "POV",
+        "$cat/cum-in-mouth/justadded/all/" to "Cum In Mouth",
+        "$cat/stockings/justadded/all/" to "Stockings",
+        "$cat/standing-sex/justadded/all/" to "Standing Sex",
+        "$cat/perfect-ass/justadded/all/" to "Perfect Ass",
+        "$cat/tit-fuck/justadded/all/" to "Tit Fuck",
+        "$cat/mini-skirt/justadded/all/" to "Mini Skirt",
+        "$cat/pov-blowjob/justadded/all/" to "POV Blowjob",
+        "$cat/threesome/justadded/all/" to "Threesome",
+        "$cat/69/justadded/all/" to "69",
+        "$cat/solo/justadded/all/" to "Solo",
+        "$cat/facial-cumshot/justadded/all/" to "Facial Cumshot",
+        "$cat/masturbation-solo/justadded/all/" to "Masturbation Solo",
+        "$cat/asian-teen-18/justadded/all/" to "Asian Teen 18+",
+        "$cat/titjob/justadded/all/" to "Titjob",
+        "$cat/tattoo/justadded/all/" to "Tattoo",
+        "$cat/face-sitting/justadded/all/" to "Face Sitting",
+        "$cat/bathroom/justadded/all/" to "Bathroom",
+        "$cat/ass-licking/justadded/all/" to "Ass Licking",
+        "$cat/blonde/justadded/all/" to "Blonde",
+        "$cat/big-butt/justadded/all/" to "Big Butt",
+        "$cat/facial/justadded/all/" to "Facial",
+        "$cat/big-cock/justadded/all/" to "Big Cock",
+        "$cat/redhead/justadded/all/" to "Redhead",
+        "$cat/female-orgasm/justadded/all/" to "Female Orgasm",
+        "$cat/busty-milf/justadded/all/" to "Busty MILF",
+        "$cat/hot-milf/justadded/all/" to "Hot MILF",
+        "$cat/fishnet/justadded/all/" to "Fishnet",
+        "$cat/high-heels/justadded/all/" to "High Heels",
+        "$cat/foot-fetish/justadded/all/" to "Foot Fetish",
+        "$cat/socks/justadded/all/" to "Socks",
+        "$cat/bikini/justadded/all/" to "Bikini",
+        "$cat/lesbian/justadded/all/" to "Lesbian",
+        "$cat/amateur-blowjob/justadded/all/" to "Amateur Blowjob",
+        "$cat/fetish/justadded/all/" to "Fetish",
+        "$cat/transgender/justadded/all/" to "Transgender",
+        "$cat/bdsm/justadded/all/" to "BDSM",
+        "$cat/outdoor/justadded/all/" to "Outdoor",
+        "$cat/cum-on-tits/justadded/all/" to "Cum On Tits",
+        "$cat/squirting/justadded/all/" to "Squirting",
+        "$cat/gang-bang/justadded/all/" to "Gang Bang",
+        "$cat/cosplay/justadded/all/" to "Cosplay",
+        "$cat/double-penetration/justadded/all/" to "Double Penetration",
+        "$cat/bondage/justadded/all/" to "Bondage",
+        "$cat/squirt/justadded/all/" to "Squirt",
+        "$cat/school/justadded/all/" to "School",
+        "$cat/interracial/justadded/all/" to "Interracial",
+        "$cat/office-lady/justadded/all/" to "Office Lady",
+        "$cat/piercing/justadded/all/" to "Piercing",
+        "$cat/glasses/justadded/all/" to "Glasses",
+        "$cat/secretary/justadded/all/" to "Secretary",
+        "$cat/mature/justadded/all/" to "Mature",
+        "$cat/maid/justadded/all/" to "Maid",
+        "$cat/nurse/justadded/all/" to "Nurse",
+        "$cat/pool/justadded/all/" to "Pool",
+        "$cat/bukkake/justadded/all/" to "Bukkake",
+        "$cat/sport/justadded/all/" to "Sport",
+        "$cat/fisting/justadded/all/" to "Fisting",
+        "$cat/uncensored/justadded/all/" to "Uncensored",
+        "$cat/pregnant/justadded/all/" to "Pregnant",
+        "$cat/uniform/justadded/all/" to "Uniform",
+        "$cat/upskirt/justadded/all/" to "Upskirt",
+        "$cat/latex/justadded/all/" to "Latex",
+        "$cat/webcam/justadded/all/" to "Webcam",
+        "$cat/strip/justadded/all/" to "Strip",
+        "$cat/student/justadded/all/" to "Student",
+        "$cat/prison/justadded/all/" to "Prison",
+        "$cat/swimsuit/justadded/all/" to "Swimsuit",
+        "$cat/medical/justadded/all/" to "Medical",
+        "$cat/mistress/justadded/all/" to "Mistress",
+        "$cat/beach/justadded/all/" to "Beach",
+        "$cat/teacher/justadded/all/" to "Teacher",
+        "$cat/party/justadded/all/" to "Party",
+        "$cat/yoga/justadded/all/" to "Yoga",
+        "$cat/reality/justadded/all/" to "Reality",
+        "$cat/bisexual/justadded/all/" to "Bisexual",
+        "$cat/sensual/justadded/all/" to "Sensual",
+        "$cat/softcore/justadded/all/" to "Softcore",
+        "$cat/spreading/justadded/all/" to "Spreading",
+        "$cat/naughty/justadded/all/" to "Naughty",
+        "$cat/beauty/justadded/all/" to "Beauty",
+        "$cat/wet/justadded/all/" to "Wet",
+        "$cat/tall/justadded/all/" to "Tall",
+        "$cat/wife/justadded/all/" to "Wife",
+        "$cat/pegging/justadded/all/" to "Pegging",
+        "$cat/princess/justadded/all/" to "Princess",
+        "$cat/whip/justadded/all/" to "Whip",
+        "$cat/wrestling/justadded/all/" to "Wrestling",
+        "$cat/hospital/justadded/all/" to "Hospital",
+        "$cat/sauna/justadded/all/" to "Sauna",
+        "$cat/kissing/justadded/all/" to "Kissing",
+        "$cat/sucking/justadded/all/" to "Sucking",
+        "$cat/swallowing/justadded/all/" to "Swallowing",
+        "$cat/vagina/justadded/all/" to "Vagina",
+        "$cat/nipples/justadded/all/" to "Nipples",
+        "$cat/nude/justadded/all/" to "Nude",
+        "$cat/pornstar/justadded/all/" to "Pornstar",
+        "$cat/adultery/justadded/all/" to "Adultery",
+        "$cat/adorable/justadded/all/" to "Adorable"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val baseUrl = request.data.removeSuffix("page=")
-        val items = fetchListing(baseUrl, page)
+        val url = request.data + page
+        val items = fetchListing(url)
         return newHomePageResponse(request.name, items)
     }
 
@@ -221,33 +246,52 @@ class JavHdProvider : MainAPI() {
             return@coroutineScope false
         }
 
+        // Call player_api — returns JSON with "sources" array
         val apiUrl = "$mainUrl/en/player_api?videoId=$videoId"
         val response = app.get(apiUrl, headers = headers)
         if (!response.isSuccessful) return@coroutineScope false
 
         val body = response.body?.string() ?: return@coroutineScope false
         val json = JsonParser.parseString(body).asJsonObject
-        val dataObj = json.getAsJsonObject("data") ?: return@coroutineScope false
-        val videosObj = dataObj.getAsJsonObject("videos") ?: return@coroutineScope false
 
-        val qualities = mapOf(
-            "_sh" to "1080p",
-            "_hq" to "720p",
-            "_med" to "480p",
-            "_low" to "240p"
-        )
+        // New API format: { sources: [{ label, res, src, type }, ...] }
+        val sourcesArray = json.getAsJsonArray("sources")
+        if (sourcesArray == null) {
+            // Fallback: old format { data: { videos: { _sh, _hq, ... } } }
+            val dataObj = json.getAsJsonObject("data")
+            val videosObj = dataObj?.getAsJsonObject("videos")
+            if (videosObj == null) return@coroutineScope false
 
-        qualities.forEach { (key, label) ->
-            val videoUrl = videosObj.get(key)?.asString
+            val qualities = mapOf(
+                "_sh" to "1080p",
+                "_hq" to "720p",
+                "_med" to "480p",
+                "_low" to "240p"
+            )
+            qualities.forEach { (key, label) ->
+                val videoUrl = videosObj.get(key)?.asString
+                if (!videoUrl.isNullOrBlank()) {
+                    launch(Dispatchers.IO) {
+                        callback(
+                            newExtractorLink(name, "$name $label", videoUrl, ExtractorLinkType.VIDEO) {
+                                this.referer = mainUrl
+                            }
+                        )
+                    }
+                }
+            }
+            return@coroutineScope true
+        }
+
+        // Parse new sources array format
+        sourcesArray.forEach { element ->
+            val source = element.asJsonObject
+            val label = source.get("label")?.asString ?: "Unknown"
+            val videoUrl = source.get("src")?.asString
             if (!videoUrl.isNullOrBlank()) {
                 launch(Dispatchers.IO) {
                     callback(
-                        newExtractorLink(
-                            name,
-                            "$name $label",
-                            videoUrl,
-                            ExtractorLinkType.VIDEO
-                        ) {
+                        newExtractorLink(name, "$name $label", videoUrl, ExtractorLinkType.VIDEO) {
                             this.referer = mainUrl
                         }
                     )
@@ -259,18 +303,25 @@ class JavHdProvider : MainAPI() {
     }
 
     /**
-     * Fetch listing via POST (XHR) for category/genre pages.
+     * Fetch listing via POST (XHR) for category/sort pages.
      * JavHD returns JSON {template, results_count, pagination_params} on POST with XHR header.
+     * Adds ?content=all to include uncensored content.
      */
-    private suspend fun fetchListing(baseUrl: String, page: Int): List<SearchResponse> {
-        val pageUrl = "${baseUrl.trimEnd('/')}$page"
-        var items: List<SearchResponse> = emptyList()
+    private suspend fun fetchListing(url: String): List<SearchResponse> {
+        // Add ?content=all for uncensored content
+        val contentUrl = if (url.contains("content=all")) {
+            url
+        } else if (url.contains("?")) {
+            "$url&content=all"
+        } else {
+            "$url?content=all"
+        }
+
+        val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
 
         // Try POST with XHR header first (returns JSON with template)
         try {
-            val postUrl = pageUrl.removeSuffix("/$page")
-            val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
-            val response = app.post(postUrl, headers = postHeaders, data = emptyMap())
+            val response = app.post(contentUrl, headers = postHeaders, data = emptyMap())
             if (response.isSuccessful) {
                 val body = response.body?.string()
                 if (!body.isNullOrBlank() && body.trimStart().startsWith("{")) {
@@ -278,21 +329,19 @@ class JavHdProvider : MainAPI() {
                     val template = json.get("template")?.asString
                     if (!template.isNullOrBlank()) {
                         val doc = Jsoup.parseBodyFragment(template)
-                        items = parseDocumentResults(doc)
+                        return parseDocumentResults(doc)
                     }
                 }
             }
         } catch (_: Exception) { }
 
         // Fallback: GET SSR HTML
-        if (items.isEmpty()) {
-            try {
-                val document = app.get(pageUrl, headers = headers).document
-                items = parseDocumentResults(document)
-            } catch (_: Exception) { }
-        }
+        try {
+            val document = app.get(contentUrl, headers = headers).document
+            return parseDocumentResults(document)
+        } catch (_: Exception) { }
 
-        return items
+        return emptyList()
     }
 
     /**
