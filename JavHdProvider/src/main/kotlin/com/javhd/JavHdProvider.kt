@@ -38,9 +38,17 @@ class JavHdProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/en/?s=$query"
-        val document = app.get(url, headers = headers).document
-        return parseDocumentResults(document)
+        val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
+        return try {
+            val response = app.post("$mainUrl/en/search?q=$query", headers = postHeaders)
+            if (!response.isSuccessful) return emptyList()
+            val body = response.body?.string() ?: return emptyList()
+            if (!body.trimStart().startsWith("{")) return emptyList()
+            val json = JsonParser.parseString(body).asJsonObject
+            val template = json.get("template")?.asString ?: return emptyList()
+            val doc = Jsoup.parseBodyFragment(template)
+            parseDocumentResults(doc)
+        } catch (_: Exception) { emptyList() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
@@ -95,7 +103,18 @@ class JavHdProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
-        val videoId = Regex("""/en/id/(\d+)/""").find(data)?.groupValues?.get(1)
+        // Try to extract videoId from URL first (listing format: /en/id/{id}/)
+        var videoId = Regex("""/en/id/(\d+)/""").find(data)?.groupValues?.get(1)
+
+        // If not found, fetch the detail page and extract from content-path attribute
+        if (videoId == null) {
+            try {
+                val document = app.get(data, headers = headers).document
+                val contentPath = document.selectFirst("[content-path]")?.attr("content-path") ?: ""
+                videoId = Regex("""videoId=(\d+)""").find(contentPath)?.groupValues?.get(1)
+            } catch (_: Exception) { }
+        }
+
         if (videoId == null) {
             return@coroutineScope false
         }
@@ -143,26 +162,31 @@ class JavHdProvider : MainAPI() {
      */
     private suspend fun fetchListing(baseUrl: String, page: Int): List<SearchResponse> {
         val pageUrl = "${baseUrl.trimEnd('/')}$page"
-        val document = app.get(pageUrl, headers = headers).document
-        var items = parseDocumentResults(document)
+        var items: List<SearchResponse> = emptyList()
 
-        if (items.isEmpty()) {
-            // Try POST with XHR header
-            try {
-                val postUrl = pageUrl.removeSuffix("/$page")
-                val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
-                val response = app.post(postUrl, headers = postHeaders, data = emptyMap())
-                if (response.isSuccessful) {
-                    val body = response.body?.string()
-                    if (!body.isNullOrBlank() && body.trimStart().startsWith("{")) {
-                        val json = JsonParser.parseString(body).asJsonObject
-                        val template = json.get("template")?.asString
-                        if (!template.isNullOrBlank()) {
-                            val doc = Jsoup.parseBodyFragment(template)
-                            items = parseDocumentResults(doc)
-                        }
+        // Try POST with XHR header first (returns JSON with template)
+        try {
+            val postUrl = pageUrl.removeSuffix("/$page")
+            val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
+            val response = app.post(postUrl, headers = postHeaders, data = emptyMap())
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (!body.isNullOrBlank() && body.trimStart().startsWith("{")) {
+                    val json = JsonParser.parseString(body).asJsonObject
+                    val template = json.get("template")?.asString
+                    if (!template.isNullOrBlank()) {
+                        val doc = Jsoup.parseBodyFragment(template)
+                        items = parseDocumentResults(doc)
                     }
                 }
+            }
+        } catch (_: Exception) { }
+
+        // Fallback: GET SSR HTML
+        if (items.isEmpty()) {
+            try {
+                val document = app.get(pageUrl, headers = headers).document
+                items = parseDocumentResults(document)
             } catch (_: Exception) { }
         }
 
