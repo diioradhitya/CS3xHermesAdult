@@ -166,7 +166,7 @@ class YstreamExtractor : ExtractorApi() {
         return mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
-            "Origin" to "https://f7hyg4q.org"
+            "Origin" to "https://ystream.id"
         ).also { if (referer != null) it["Referer"] = referer }
     }
 
@@ -339,7 +339,7 @@ class YstreamExtractor : ExtractorApi() {
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
         // Step 0: ECDSA attestation (gets fingerprint object)
-        val embedBase = "https://f7hyg4q.org"
+        val embedBase = "https://ystream.id"
         val fpObj = doAttestation(embedBase)
         if (fpObj == null) {
             Log.e(TAG, "attestation failed, aborting")
