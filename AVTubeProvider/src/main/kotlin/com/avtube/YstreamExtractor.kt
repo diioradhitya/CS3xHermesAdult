@@ -388,8 +388,10 @@ class YstreamExtractor : ExtractorApi() {
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
+            "Origin" to "https://ystream.id",
+            "Referer" to embedFrameUrl,
             "X-Embed-Origin" to "ystream.id",
-            "X-Embed-Referer" to (referer ?: embedFrameUrl),
+            "X-Embed-Referer" to embedFrameUrl,
             "X-Embed-Parent" to "https://ystream.id/e/$code/",
             "X-Captcha-Token" to captcha.powToken
         )

@@ -3,8 +3,7 @@ package com.avtube
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Element
 
 class AVTubeProvider : MainAPI() {
@@ -97,13 +96,13 @@ class AVTubeProvider : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
+    ): Boolean {
         val document = app.get(data, headers = headers).document
 
         val iframeSrc = document.selectFirst("div.responsive-player iframe, div.video-player iframe")?.attr("src")
             ?: document.selectFirst("iframe")?.attr("src")
 
-        if (iframeSrc.isNullOrBlank()) return@coroutineScope false
+        if (iframeSrc.isNullOrBlank()) return false
 
         val morenciusDomains = listOf("morencius.com", "dingtezuni.com", "mivalyo.com", "ryderjet.com", "bingezove.com", "movearnpre.com")
         val ystreamDomains = listOf("ystream.id", "f7hyg4q.org")
@@ -117,7 +116,7 @@ class AVTubeProvider : MainAPI() {
             else -> iframeSrc
         }
 
-        launch(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             try {
                 when {
                     isYstream -> YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
@@ -125,9 +124,9 @@ class AVTubeProvider : MainAPI() {
                     else -> loadExtractor(fixedUrl, data, subtitleCallback, callback)
                 }
             } catch (e: Exception) {
-                kotlin.runCatching { e.printStackTrace() }
+                android.util.Log.e("AVTubeProvider", "Extractor error: ${e.message}", e)
             }
         }
-        return@coroutineScope true
+        return true
     }
 }
