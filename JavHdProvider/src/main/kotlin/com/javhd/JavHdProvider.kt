@@ -3,9 +3,6 @@ package com.javhd
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.google.gson.JsonParser
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 
 class JavHdProvider : MainAPI() {
@@ -99,7 +96,7 @@ class JavHdProvider : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
+    ): Boolean {
         var videoId = Regex("""/en/id/(\d+)/""").find(data)?.groupValues?.get(1)
 
         if (videoId == null) {
@@ -110,58 +107,66 @@ class JavHdProvider : MainAPI() {
             } catch (_: Exception) { }
         }
 
-        if (videoId == null) return@coroutineScope false
+        if (videoId == null) return false
 
         val apiUrl = "$mainUrl/en/player_api?videoId=$videoId"
         val response = app.get(apiUrl, headers = headers)
-        if (!response.isSuccessful) return@coroutineScope false
+        if (!response.isSuccessful) return false
 
-        val body = response.body?.string() ?: return@coroutineScope false
+        val body = response.body?.string() ?: return false
         val json = JsonParser.parseString(body).asJsonObject
 
         val sourcesArray = json.getAsJsonArray("sources")
         if (sourcesArray == null) {
+            // Fallback: old format { data: { videos: { _sh, _hq, _med, _low } } }
             val dataObj = json.getAsJsonObject("data")
             val videosObj = dataObj?.getAsJsonObject("videos")
-            if (videosObj == null) return@coroutineScope false
+            if (videosObj == null) return false
 
-            val qualities = mapOf(
-                "_sh" to "1080p",
-                "_hq" to "720p",
-                "_med" to "480p",
-                "_low" to "240p"
+            val qualities = listOf(
+                "_sh" to 1080,
+                "_hq" to 720,
+                "_med" to 480,
+                "_low" to 240
             )
-            qualities.forEach { (key, label) ->
+            qualities.forEach { (key, res) ->
                 val videoUrl = videosObj.get(key)?.asString
                 if (!videoUrl.isNullOrBlank()) {
-                    launch(Dispatchers.IO) {
-                        callback(
-                            newExtractorLink(name, "$name $label", videoUrl, ExtractorLinkType.VIDEO) {
-                                this.referer = mainUrl
-                            }
-                        )
-                    }
-                }
-            }
-            return@coroutineScope true
-        }
-
-        sourcesArray.forEach { element ->
-            val source = element.asJsonObject
-            val label = source.get("label")?.asString ?: "Unknown"
-            val videoUrl = source.get("src")?.asString
-            if (!videoUrl.isNullOrBlank()) {
-                launch(Dispatchers.IO) {
                     callback(
-                        newExtractorLink(name, "$name $label", videoUrl, ExtractorLinkType.VIDEO) {
+                        newExtractorLink(name, "$name ${res}p", videoUrl, ExtractorLinkType.VIDEO) {
                             this.referer = mainUrl
+                            this.quality = res
                         }
                     )
                 }
             }
+            return true
         }
 
-        return@coroutineScope true
+        // New API format: sort sources by resolution descending (1080 -> 240)
+        val sortedSources = sourcesArray
+            .mapNotNull { el ->
+                val src = el.asJsonObject
+                val res = src.get("res")?.let {
+                    if (it.isJsonPrimitive && it.asJsonPrimitive.isNumber) it.asInt else null
+                } ?: src.get("label")?.asString?.substringBefore("p")?.toIntOrNull() ?: 0
+                Triple(src, src.get("label")?.asString ?: "Unknown", res)
+            }
+            .sortedByDescending { it.third }
+
+        sortedSources.forEach { (src, label, res) ->
+            val videoUrl = src.get("src")?.asString
+            if (!videoUrl.isNullOrBlank()) {
+                callback(
+                    newExtractorLink(name, "$name $label", videoUrl, ExtractorLinkType.VIDEO) {
+                        this.referer = mainUrl
+                        this.quality = res
+                    }
+                )
+            }
+        }
+
+        return true
     }
 
     private suspend fun fetchListing(url: String): List<SearchResponse> {
