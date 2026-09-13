@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.net.URI
 import java.security.KeyPairGenerator
 import java.security.Signature
@@ -27,7 +28,10 @@ class YstreamExtractor : ExtractorApi() {
     override var mainUrl = "https://ystream.id"
     override val requiresReferer = true
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val jsonMapper = ObjectMapper()
 
@@ -433,11 +437,13 @@ class YstreamExtractor : ExtractorApi() {
 /* Data classes                                                        */
 /* ------------------------------------------------------------------ */
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChallengeResp(
     @JsonProperty("challenge_id") val challenge_id: String,
     @JsonProperty("nonce") val nonce: String
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class AttestResp(
     @JsonProperty("token") val token: String?,
     @JsonProperty("viewer_id") val viewer_id: String?,
@@ -445,22 +451,27 @@ data class AttestResp(
     @JsonProperty("confidence") val confidence: String?
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class DetailsRoot(@JsonProperty("embed_frame_url") val embedFrameUrl: String)
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class CaptchaRoot(
     @JsonProperty("pow_nonce") val powNonce: String,
     @JsonProperty("pow_difficulty") val powDifficulty: Int,
     @JsonProperty("pow_token") val powToken: String
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class VerifyRoot(
     @JsonProperty("status") val status: String,
     @JsonProperty("token") val token: String? = null,
     @JsonProperty("fingerprint") val fingerprint: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackRoot(@JsonProperty("playback") val playback: Playback?)
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class Playback(
     @JsonProperty("iv") val iv: String,
     @JsonProperty("payload") val payload: String,
@@ -468,5 +479,7 @@ data class Playback(
     @JsonProperty("version") val version: Int = 1
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackDecrypt(@JsonProperty("sources") val sources: List<PlaybackDecryptSource>)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackDecryptSource(@JsonProperty("url") val url: String)
