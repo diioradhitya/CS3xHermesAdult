@@ -112,14 +112,14 @@ class AVTubeProvider : MainAPI() {
 
         val fixedUrl = when {
             isMorencius -> iframeSrc.replace(Regex("https?://[^/]+"), "https://morencius.com")
-            isYstream -> iframeSrc.replace(Regex("https?://[^/]+"), "https://ystream.id")
+            isYstream -> iframeSrc
             else -> iframeSrc
         }
 
         withContext(Dispatchers.IO) {
             try {
                 when {
-                    isYstream -> YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
+                    isYstream -> ByseExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
                     isMorencius -> Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
                     else -> loadExtractor(fixedUrl, data, subtitleCallback, callback)
                 }

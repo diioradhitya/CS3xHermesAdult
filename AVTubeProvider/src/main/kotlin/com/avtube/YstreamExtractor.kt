@@ -19,14 +19,19 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * ystream.id uses a Byse-family embed with Proof-of-Work (PoW) anti-bot protection
- * plus ECDSA P-256 attestation.
- * Implements: ECDSA attestation, custom XXH-like hash, PoW solver, AES-GCM decryption.
+ * Byse-family embed extractor with ECDSA P-256 attestation,
+ * custom PoW (XXH-family hash), and AES-GCM decryption.
+ *
+ * YstreamExtractor: ystream.id base, embed/ API paths
+ * ByseExtractor:   f7hyg4q.org base, non-embed API paths
  */
-class YstreamExtractor : ExtractorApi() {
+open class YstreamExtractor : ExtractorApi() {
     override var name = "Ystream"
     override var mainUrl = "https://ystream.id"
     override val requiresReferer = true
+
+    /** When true, API paths include /embed/ prefix. Override in subclass. */
+    open val useEmbedPath: Boolean = true
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -40,6 +45,14 @@ class YstreamExtractor : ExtractorApi() {
     companion object {
         private const val TAG = "YstreamExtractor"
     }
+
+    /** Helper: returns API path prefix based on useEmbedPath */
+    private fun apiPath(suffix: String): String {
+        val prefix = if (useEmbedPath) "embed/" else ""
+        return "/api/videos/$code/${prefix}${suffix}"
+    }
+
+    private lateinit var code: String
 
     /* ------------------------------------------------------------------ */
     /* PoW solver: port of pow.js custom hash (XXH-family), NOT sha256   */
@@ -166,7 +179,7 @@ class YstreamExtractor : ExtractorApi() {
         return mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
-            "Origin" to "https://ystream.id"
+            "Origin" to mainUrl
         ).also { if (referer != null) it["Referer"] = referer }
     }
 
@@ -187,8 +200,7 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
-    private fun doAttestation(embedBase: String): Map<String, String>? {
-        // 1. Generate ECDSA P-256 key pair
+    private fun doAttestation(): Map<String, String>? {
         val kpg = KeyPairGenerator.getInstance("EC")
         kpg.initialize(java.security.spec.ECGenParameterSpec("prime256v1"))
         val keyPair = kpg.generateKeyPair()
@@ -202,23 +214,19 @@ class YstreamExtractor : ExtractorApi() {
         )
         Log.d(TAG, "ECDSA keypair generated")
 
-        // 2. Get challenge
-        val hdrs = baseHeaders(null)
-        val chRaw = httpPost("$embedBase/api/videos/access/challenge", "{}", hdrs) ?: return null
+        val hdrs = baseHeaders(null).apply { put("Content-Type", "application/json; charset=utf-8") }
+        val chRaw = httpPost("$mainUrl/api/videos/access/challenge", "{}", hdrs) ?: return null
         val ch = tryParseJson<ChallengeResp>(chRaw) ?: return null
         Log.d(TAG, "challenge_id=${ch.challenge_id}")
 
-        // 3. Sign nonce
         val sig = Signature.getInstance("SHA256withECDSA")
         sig.initSign(keyPair.private)
         sig.update(ch.nonce.toByteArray(Charsets.US_ASCII))
         val signatureBytes = sig.sign()
 
-        // Convert DER-encoded signature to raw r||s (64 bytes)
         val rawSig = derToRawSig(signatureBytes)
         val sigB64 = b64urlEncode(rawSig)
 
-        // 4. Attest
         val attestBody = mapOf(
             "viewer_id" to "",
             "device_id" to "",
@@ -237,7 +245,7 @@ class YstreamExtractor : ExtractorApi() {
             "storage" to emptyMap<String, Any>(),
             "attributes" to mapOf("entropy" to "low")
         )
-        val attRaw = httpPost("$embedBase/api/videos/access/attest", jsonMapper.writeValueAsString(attestBody), hdrs) ?: return null
+        val attRaw = httpPost("$mainUrl/api/videos/access/attest", jsonMapper.writeValueAsString(attestBody), hdrs) ?: return null
         val att = tryParseJson<AttestResp>(attRaw)
         if (att?.token == null) {
             Log.e(TAG, "attest failed: $attRaw")
@@ -253,10 +261,9 @@ class YstreamExtractor : ExtractorApi() {
     }
 
     private fun derToRawSig(derSig: ByteArray): ByteArray {
-        // DER: 0x30 [len] 0x02 [len] [r] 0x02 [len] [s]
         var idx = 0
         if (derSig[idx++] != 0x30.toByte()) return derSig
-        idx++ // total length
+        idx++
         if (derSig[idx++] != 0x02.toByte()) return derSig
         var rLen = derSig[idx++].toInt() and 0xFF
         val r = derSig.copyOfRange(idx, idx + rLen)
@@ -265,7 +272,6 @@ class YstreamExtractor : ExtractorApi() {
         var sLen = derSig[idx++].toInt() and 0xFF
         val s = derSig.copyOfRange(idx, idx + sLen)
 
-        // Pad/trim to 32 bytes
         val r32 = when { r.size == 32 -> r; r.size > 32 -> r.copyOfRange(r.size - 32, r.size); else -> ByteArray(32 - r.size) + r }
         val s32 = when { s.size == 32 -> s; s.size > 32 -> s.copyOfRange(s.size - 32, s.size); else -> ByteArray(32 - s.size) + s }
         return r32 + s32
@@ -292,7 +298,6 @@ class YstreamExtractor : ExtractorApi() {
     private fun decryptPayload(iv: String, payload: String, keyParts: List<String>, version: Int): String? {
         return try {
             if (keyParts.isEmpty()) return null
-            // Version-based key selection: Qa table maps version n -> [n, 31-n]
             val idx1 = version
             val idx2 = 31 - version
             val selectedParts = if (idx1 in 1..keyParts.size && idx2 in 1..keyParts.size) {
@@ -324,8 +329,11 @@ class YstreamExtractor : ExtractorApi() {
     }
 
     private fun getCodeFromUrl(url: String): String {
-        return Regex("""/(?:e|v|d)/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1) ?: ""
+        return Regex("""/(?:e|v|d|zvc|nx91|5pfz0|8mz|zvc)/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1) ?: ""
     }
+
+    /** Get the path prefix for X-Embed-Parent. Override for different path types. */
+    open fun getParentPath(code: String): String = "/e/$code/"
 
     override suspend fun getUrl(
         url: String,
@@ -334,13 +342,12 @@ class YstreamExtractor : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val refererUrl = getBaseUrl(url)
-        val code = getCodeFromUrl(url)
+        code = getCodeFromUrl(url)
         if (code.isEmpty()) return
-        Log.d(TAG, "=== START extract code=$code referer=$referer ===")
+        Log.d(TAG, "=== START extract code=$code base=$mainUrl embedPath=$useEmbedPath ===")
 
-        // Step 0: ECDSA attestation (gets fingerprint object)
-        val embedBase = "https://ystream.id"
-        val fpObj = doAttestation(embedBase)
+        // Step 0: ECDSA attestation
+        val fpObj = doAttestation()
         if (fpObj == null) {
             Log.e(TAG, "attestation failed, aborting")
             return
@@ -348,15 +355,15 @@ class YstreamExtractor : ExtractorApi() {
 
         // Step 1: get embed frame URL from details endpoint
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$embedBase/api/videos/$code/embed/details", detailsHeaders) ?: return
+        val detailsRaw = httpGet("$mainUrl${apiPath("details")}", detailsHeaders) ?: return
         val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
         val embedFrameUrl = details.embedFrameUrl
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
 
-        // Step 2: get PoW challenge — POST with fingerprint
+        // Step 2: get PoW challenge
         val captchaBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
-        val captchaHeaders = baseHeaders(embedFrameUrl)
-        val captchaRaw = httpPost("$embedBase/api/videos/$code/embed/captcha", captchaBody, captchaHeaders) ?: return
+        val captchaHeaders = baseHeaders(embedFrameUrl).apply { put("Content-Type", "application/json; charset=utf-8") }
+        val captchaRaw = httpPost("$mainUrl${apiPath("captcha")}", captchaBody, captchaHeaders) ?: return
         val captcha = tryParseJson<CaptchaRoot>(captchaRaw) ?: return
         Log.d(TAG, "captcha: difficulty=${captcha.powDifficulty}")
 
@@ -367,14 +374,14 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "PoW solution=$solution")
 
-        // Step 4: verify PoW → get status — POST with pow_token, solution, AND fingerprint
+        // Step 4: verify PoW
         val verifyBody = jsonMapper.writeValueAsString(mapOf(
             "pow_token" to captcha.powToken,
             "solution" to solution,
             "fingerprint" to fpObj
         ))
-        val verifyHeaders = baseHeaders(embedFrameUrl)
-        val verifyRaw = httpPost("$embedBase/api/videos/$code/embed/captcha/verify", verifyBody, verifyHeaders) ?: return
+        val verifyHeaders = baseHeaders(embedFrameUrl).apply { put("Content-Type", "application/json; charset=utf-8") }
+        val verifyRaw = httpPost("$mainUrl${apiPath("captcha/verify")}", verifyBody, verifyHeaders) ?: return
         val verify = tryParseJson<VerifyRoot>(verifyRaw)
         if (verify?.status != "ok") {
             Log.e(TAG, "verify failed: $verifyRaw")
@@ -382,20 +389,20 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "verify OK")
 
-        // Step 5: get encrypted playback payload — POST with full fingerprint + embed headers
+        // Step 5: get encrypted playback payload
         val playBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
         val playHeaders = mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
-            "Origin" to "https://ystream.id",
+            "Origin" to mainUrl,
             "Referer" to embedFrameUrl,
-            "X-Embed-Origin" to "ystream.id",
+            "X-Embed-Origin" to mainUrl.replace("https://", ""),
             "X-Embed-Referer" to embedFrameUrl,
-            "X-Embed-Parent" to "https://ystream.id/e/$code/",
+            "X-Embed-Parent" to "$mainUrl${getParentPath(code)}",
             "X-Captcha-Token" to captcha.powToken
         )
-        val playbackRaw = httpPost("$embedBase/api/videos/$code/embed/playback", playBody, playHeaders) ?: return
+        val playbackRaw = httpPost("$mainUrl${apiPath("playback")}", playBody, playHeaders) ?: return
         val playback = tryParseJson<PlaybackRoot>(playbackRaw)
         if (playback?.playback == null) {
             Log.e(TAG, "playback failed: ${playbackRaw.take(200)}")
@@ -403,7 +410,7 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "playback OK: key_parts=${playback.playback.keyParts.size}, version=${playback.playback.version}")
 
-        // Step 6: AES-GCM decrypt → extract m3u8 URL
+        // Step 6: AES-GCM decrypt
         val jsonStr = decryptPayload(
             playback.playback.iv,
             playback.playback.payload,
@@ -430,7 +437,7 @@ class YstreamExtractor : ExtractorApi() {
             name,
             streamUrl,
             refererUrl,
-            headers = mapOf("Referer" to "https://ystream.id/e/$code/", "User-Agent" to ua)
+            headers = mapOf("Referer" to "$mainUrl${getParentPath(code)}", "User-Agent" to ua)
         ).forEach(callback)
     }
 }
