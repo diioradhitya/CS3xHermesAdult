@@ -387,7 +387,7 @@ class YstreamExtractor : ExtractorApi() {
             "X-Embed-Origin" to "ystream.id",
             "X-Embed-Referer" to (referer ?: embedFrameUrl),
             "X-Embed-Parent" to "https://ystream.id/e/$code/",
-            "X-Captcha-Token" to captcha.powToken
+            "X-Captcha-Token" to verify?.token.orEmpty()
         )
         val playbackRaw = httpPost("$embedBase/api/videos/$code/embed/playback", playBody, playHeaders) ?: return
         val playback = tryParseJson<PlaybackRoot>(playbackRaw)
