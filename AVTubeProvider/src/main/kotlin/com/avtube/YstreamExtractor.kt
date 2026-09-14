@@ -7,9 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URI
 import java.security.KeyPairGenerator
 import java.security.Signature
@@ -33,11 +33,6 @@ open class YstreamExtractor : ExtractorApi() {
     /** When true, API paths include /embed/ prefix. Override in subclass. */
     open val useEmbedPath: Boolean = true
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val jsonMapper = ObjectMapper()
 
     private val ua = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
@@ -149,26 +144,22 @@ open class YstreamExtractor : ExtractorApi() {
     }
 
     /* ------------------------------------------------------------------ */
-    /* HTTP helpers via OkHttp                                           */
+    /* HTTP helpers via CloudStream app (VPN/proxy compatible)            */
     /* ------------------------------------------------------------------ */
 
-    private fun httpPost(url: String, body: String, headers: Map<String, String>): String? {
-        val reqBody = RequestBody.create(jsonMediaType, body)
-        val builder = Request.Builder().url(url).post(reqBody)
-        headers.forEach { (k, v) -> builder.header(k, v) }
+    private suspend fun httpPost(url: String, body: String, headers: Map<String, String>): String? {
         return try {
-            client.newCall(builder.build()).execute().use { it.body?.string() }
+            val reqBody = body.toRequestBody("application/json; charset=utf-8".toMediaType())
+            app.post(url, headers = headers, requestBody = reqBody).text
         } catch (e: Exception) {
             Log.e(TAG, "POST $url failed: ${e.message}")
             null
         }
     }
 
-    private fun httpGet(url: String, headers: Map<String, String>): String? {
-        val builder = Request.Builder().url(url).get()
-        headers.forEach { (k, v) -> builder.header(k, v) }
+    private suspend fun httpGet(url: String, headers: Map<String, String>): String? {
         return try {
-            client.newCall(builder.build()).execute().use { it.body?.string() }
+            app.get(url, headers = headers).text
         } catch (e: Exception) {
             Log.e(TAG, "GET $url failed: ${e.message}")
             null
@@ -200,7 +191,7 @@ open class YstreamExtractor : ExtractorApi() {
         }
     }
 
-    private fun doAttestation(): Map<String, String>? {
+    private suspend fun doAttestation(): Map<String, String>? {
         val kpg = KeyPairGenerator.getInstance("EC")
         kpg.initialize(java.security.spec.ECGenParameterSpec("prime256v1"))
         val keyPair = kpg.generateKeyPair()
