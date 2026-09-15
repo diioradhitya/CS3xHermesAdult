@@ -388,10 +388,10 @@ class YstreamExtractor : ExtractorApi() {
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
-            "X-Embed-Origin" to "ystream.id",
-            "X-Embed-Referer" to (referer ?: embedFrameUrl),
+            "X-Embed-Origin" to "f7hyg4q.org",
+            "X-Embed-Referer" to embedFrameUrl,
             "X-Embed-Parent" to "https://f7hyg4q.org/d/$code/",
-            "X-Captcha-Token" to captcha.powToken
+            "X-Captcha-Token" to (verify.token ?: captcha.powToken)
         )
         val playbackRaw = httpPost("$embedBase/api/videos/$code/playback", playBody, playHeaders) ?: return
         val playback = tryParseJson<PlaybackRoot>(playbackRaw)
