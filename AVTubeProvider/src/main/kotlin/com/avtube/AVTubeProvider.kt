@@ -119,7 +119,7 @@ class AVTubeProvider : MainAPI() {
         withContext(Dispatchers.IO) {
             try {
                 when {
-                    isYstream -> ByseExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
+                    isYstream -> YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
                     isMorencius -> Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
                     else -> loadExtractor(fixedUrl, data, subtitleCallback, callback)
                 }
