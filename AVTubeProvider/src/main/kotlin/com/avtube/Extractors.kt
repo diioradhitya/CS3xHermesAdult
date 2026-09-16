@@ -3,6 +3,7 @@ package com.avtube
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
+import android.util.Log
 
 /**
  * VidHide / EarnVids family extractor (morencius.com, dingtezuni.com, ...).
@@ -39,15 +40,21 @@ open class Dingtezuni : ExtractorApi() {
         val response = app.get(embedUrl, referer = referer)
         val script = response.text
 
+        // DEBUG LOG
+        Log.d("AVTubeDebug", "embedUrl=$embedUrl, scriptLen=${script.length}")
+
         // try self-contained unpack first
         val unpacked = unpackMorencius(script)
+        Log.d("AVTubeDebug", "unpacked=${unpacked != null}, len=${unpacked?.length ?: 0}")
         var emitted = false
         if (unpacked != null) {
             // prefer hls links in order: hls4(highest) .. hls1, then any m3u8 in links object
-            val linkRegex = Regex("\"hls(\\d)\":\\s*\"([^\"]+)\"")
+            val linkRegex = Regex("\\\"hls(\\\\d)\\\":\\\\s*\\\"([^\\\"]+)\\\"")
             val found = linkRegex.findAll(unpacked).map { it.groupValues[2] }.toList()
+            Log.d("AVTubeDebug", "found hls entries: ${found.size} -> $found")
             for (rawUrl in found) {
                 val fullUrl = toAbs(rawUrl, embedUrl)
+                Log.d("AVTubeDebug", "try generateM3u8 for: $fullUrl")
                 val m3u8 = generateM3u8(name, fullUrl, referer = "$mainUrl/", headers = headers)
                 if (m3u8.isNotEmpty()) {
                     m3u8.forEach(callback)
@@ -56,8 +63,9 @@ open class Dingtezuni : ExtractorApi() {
             }
             if (!emitted) {
                 // fallback: any "url" containing m3u8
-                Regex("\"((?:https?:)?//[^\"]*?m3u8[^\"]*)\"").findAll(unpacked).forEach { match ->
+                Regex("\\\"((?:https?:)?//[^\\\"]*?m3u8[^\\\"]*)\\\"").findAll(unpacked).forEach { match ->
                     val fullUrl = toAbs(match.groupValues[1], embedUrl)
+                    Log.d("AVTubeDebug", "fallback try generateM3u8 for: $fullUrl")
                     generateM3u8(name, fullUrl, referer = "$mainUrl/", headers = headers).forEach(callback)
                     emitted = true
                 }
@@ -68,7 +76,7 @@ open class Dingtezuni : ExtractorApi() {
         if (!emitted) {
             val legacy = response.document.selectFirst("script:containsData(sources:)")?.data()
             if (!legacy.isNullOrEmpty()) {
-                Regex(":\\s*\"(.*?m3u8.*?)\"").findAll(legacy).forEach { match ->
+                Regex(":\\\\s*\\\"(.*?m3u8.*?)\\\"").findAll(legacy).forEach { match ->
                     generateM3u8(
                         name,
                         fixUrl(match.groupValues[1]),
@@ -79,6 +87,7 @@ open class Dingtezuni : ExtractorApi() {
                 }
             }
         }
+        Log.d("AVTubeDebug", "emitted=$emitted")
     }
 
     private fun toAbs(u: String, embedUrl: String): String = when {
@@ -97,7 +106,7 @@ open class Dingtezuni : ExtractorApi() {
      */
     private fun unpackMorencius(script: String): String? {
         val packMatcher = Regex(
-            "eval\\(function\\(p,a,c,k,e,d\\)\\{.*?\\}\\('((?:[^'\\\\]|\\\\.)*)',\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*'((?:[^'\\\\]|\\\\.)*)'",
+            "eval\\\\(function\\\\(p,a,c,k,e,d\\\\)\\\\{.*?\\\\}\\\\('((?:[^'\\\\\\\\]|\\\\\\\\.)*)',\\\\s*(\\\\d+)\\\\s*,\\\\s*(\\\\d+)\\\\s*,\\\\s*'((?:[^'\\\\\\\\]|\\\\\\\\.)*)'",
             RegexOption.DOT_MATCHES_ALL
         ).find(script) ?: return null
 
