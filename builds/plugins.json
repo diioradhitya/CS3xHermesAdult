@@ -203,7 +203,7 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 16,
+    "version": 17,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
@@ -218,7 +218,7 @@
     ],
     "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-3ae3309a0d1127278d9c8e3783f0f845563ae7b850a565de09002b84955f6ac4"
+    "fileHash": "sha256-2011c163e6748476ef737966cb46d05d4d8d8e8e4e2f201e35352af154add80a"
   },
   {
     "iconUrl": "https://nekopoi.care/wp-content/uploads/2022/07/favicon.png",
