@@ -158,11 +158,16 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
+    private val siteOrigin = "https://ystream.id"
+
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
-            "Origin" to "https://f7hyg4q.org"
+            // The API rejects requests whose Origin is not the *site* domain with
+            // 403 "embedding from this domain is not allowed for this video".
+            // The API host itself (which rotates) must never appear here.
+            "Origin" to siteOrigin
         ).also { if (referer != null) it["Referer"] = referer }
     }
 
@@ -268,6 +273,37 @@ class YstreamExtractor : ExtractorApi() {
     }
 
     /* ------------------------------------------------------------------ */
+    /* Fingerprint                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Structurally valid fingerprint object. The API accepts a well-formed
+     * JWT-shaped token without verifying the ES256 signature, so generating a
+     * real P-256 keypair adds latency and a failure mode for no gain.
+     */
+    private fun fingerprint(): Map<String, Any> {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        val seed = System.nanoTime()
+        fun rnd(n: Int): String {
+            val sb = StringBuilder(n)
+            for (i in 0 until n) {
+                sb.append(alphabet[((seed + i * 2654435761L).mod(alphabet.length.toLong())).toInt()])
+            }
+            return sb.toString()
+        }
+        val header = Base64.encodeToString(
+            """{"alg":"ES256","typ":"JWT"}""".toByteArray(),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return mapOf(
+            "token" to "$header.${rnd(80)}.${rnd(86)}",
+            "viewer_id" to rnd(22),
+            "device_id" to rnd(22),
+            "confidence" to 0.9
+        )
+    }
+
+    /* ------------------------------------------------------------------ */
     /* AES-GCM helpers                                                   */
     /* ------------------------------------------------------------------ */
 
@@ -334,20 +370,21 @@ class YstreamExtractor : ExtractorApi() {
         if (code.isEmpty()) return
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
-        // Step 0: ECDSA attestation (gets fingerprint object)
-        val embedBase = "https://f7hyg4q.org"
-        val fpObj = doAttestation(embedBase)
-        if (fpObj == null) {
-            Log.e(TAG, "attestation failed, aborting")
-            return
-        }
+        // Step 0: structural fingerprint.
+        // The embed API does not verify the ES256 signature — a well-formed
+        // JWT-shaped token is accepted. The previous ECDSA P-256 attestation
+        // round-trip only added latency and an extra failure mode.
+        val fpObj = fingerprint()
 
-        // Step 1: get embed frame URL from details endpoint
+        // Step 1: get embed frame URL from details endpoint.
+        // The API host rotates per video, so always start from the site origin
+        // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$embedBase/api/videos/$code/embed/details", detailsHeaders) ?: return
+        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders) ?: return
         val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
         val embedFrameUrl = details.embedFrameUrl
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
+        val embedBase = getBaseUrl(embedFrameUrl)
 
         // Step 2: get PoW challenge — POST with fingerprint
         val captchaBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
@@ -380,13 +417,16 @@ class YstreamExtractor : ExtractorApi() {
 
         // Step 5: get encrypted playback payload — POST with full fingerprint + embed headers
         val playBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
+        val embedRef = "$siteOrigin/e/$code/"
         val playHeaders = mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
-            "X-Embed-Origin" to "ystream.id",
-            "X-Embed-Referer" to (referer ?: embedFrameUrl),
-            "X-Embed-Parent" to "https://ystream.id/e/$code/",
+            "Origin" to siteOrigin,
+            "Referer" to embedRef,
+            "X-Embed-Origin" to siteOrigin,
+            "X-Embed-Referer" to embedRef,
+            "X-Embed-Parent" to embedRef,
             "X-Captcha-Token" to verify?.token.orEmpty()
         )
         val playbackRaw = httpPost("$embedBase/api/videos/$code/embed/playback", playBody, playHeaders) ?: return

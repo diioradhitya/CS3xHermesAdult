@@ -68,8 +68,12 @@ class JavSegarProvider : MainAPI() {
         if (data.isBlank()) return false
 
         return when {
-            // ystream.id embed: handle with PoW-protected extractor
-            data.contains("ystream.id") -> {
+            // ystream.id / Byse-family embed: PoW-protected extractor.
+            // Match on the embed code path as well, so a rotated or aliased
+            // embed host is still routed here instead of falling through to
+            // loadExtractor and returning "no links found".
+            data.contains("ystream") || data.contains("byse") ||
+                Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
                 YstreamExtractor().getUrl(data, data, subtitleCallback, callback)
                 true
             }
