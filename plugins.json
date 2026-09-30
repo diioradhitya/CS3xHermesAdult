@@ -2,12 +2,15 @@
   {
     "name": "JavSegarProvider",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSegarProvider.cs3",
-    "version": 3,
-    "fileHash": "sha256-90eb95fb05f8d5cc5694852115b04f28f1e02a48b528d6bff5772b4390ff9e39",
+    "version": 5,
+    "fileHash": "sha256-f7c42983e17826a4b7dcb02aec4d5f43ccc3e56e733e2c7ead1978cbfe6e2b8b",
     "status": 2,
     "tvTypes": [
       "NSFW"
     ],
-    "iconUrl": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/icon.png"
+    "iconUrl": "https://javsegar.com/wp-content/uploads/2022/11/GVH-089-e1667276836371.jpg",
+    "allowedDomains": [
+      "javsegar.com"
+    ]
   }
 ]
