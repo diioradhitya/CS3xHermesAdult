@@ -1,0 +1,13 @@
+[
+  {
+    "name": "JavSegarProvider",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSegarProvider.cs3",
+    "version": 3,
+    "fileHash": "sha256-90eb95fb05f8d5cc5694852115b04f28f1e02a48b528d6bff5772b4390ff9e39",
+    "status": 2,
+    "tvTypes": [
+      "NSFW"
+    ],
+    "iconUrl": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/icon.png"
+  }
+]
