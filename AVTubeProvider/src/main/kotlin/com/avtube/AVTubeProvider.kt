@@ -98,41 +98,74 @@ class AVTubeProvider : MainAPI() {
     ): Boolean {
         val document = app.get(data, headers = headers).document
 
-        val iframeSrc = document.selectFirst("div.responsive-player iframe, div.video-player iframe")?.attr("src")
-            ?: document.selectFirst("iframe")?.attr("src")
+                // Harvest every iframe, not just the first. These pages are padded with ad
+                // and promo iframes, so selectFirst regularly landed on a tracking frame and
+                // loadLinks then reported nothing. Order the list the same way a reader's eye
+                // would: the dedicated player container first, then anything left over.
+                val preferred = document.select("div.responsive-player iframe[src], div.video-player iframe[src], iframe[src]")
+                    .map { it.attr("src").trim() }
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { src -> runCatching { fixUrl(src) }.getOrDefault(src) }
+                    .filter { it.startsWith("http") }
 
-        if (iframeSrc.isNullOrBlank()) return false
+                if (preferred.isEmpty()) return false
 
-        // The ystream/Byse family rotates its API host (f7hyg4q.org, ystream.id,
-        // n1mwq.org, ...). Verified live for embed code emuf2fon3lsy on a phone:
-        //   GET /api/videos/<code>/embed/details -> f7hyg4q.org 403, ystream.id 200
-        // A hardcoded host therefore returns 403 and loadLinks reports nothing,
-        // which is what produced "no links found". Take the host from the iframe
-        // we were actually handed - YstreamExtractor derives siteOrigin from it.
-        val fixedUrl = iframeSrc
+                android.util.Log.d(TAG, "candidate iframes (${preferred.size}): ${preferred.take(6)}")
 
-        withContext(Dispatchers.IO) {
-            try {
-                if (isYstreamFamily(fixedUrl)) {
-                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
-                } else if (isMorenciusFamily(fixedUrl)) {
-                    Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
-                } else if (!loadExtractor(fixedUrl, data, subtitleCallback, callback)) {
-                    // Nothing recognised it - try the ystream path anyway, since a
-                    // rotated host may not match any static list.
-                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
+                // The ystream/Byse family rotates its API host (f7hyg4q.org, ystream.id,
+                // n1mwq.org, ...). Verified live for embed code emuf2fon3lsy on a phone:
+                //   GET /api/videos/<code>/embed/details -> f7hyg4q.org 403, ystream.id 200
+                // A hardcoded host therefore returns 403 and loadLinks reports nothing,
+                // which is what produced "no links found". Take the host from the iframe
+                // we were actually handed - YstreamExtractor derives siteOrigin from it.
+                //
+                // Try each candidate until one actually emits a link: an extractor that
+                // fails silently must not consume the only attempt.
+                for (fixedUrl in preferred) {
+                    val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+                    try {
+                        // CloudStream's built-in extractors already cover doodstream,
+                        // streamtape, vidara and friends, and they match on host name, so
+                        // let them try first.
+                        //
+                        // This ordering is load-bearing: the Byse/ystream family also serves
+                        // /e/<code> paths, so a shape-only match would hijack a Doodstream
+                        // embed. v18 did exactly that - post 150197 sent doodstream code
+                        // 66hek743yem1 to the ystream API, which answered
+                        // "video record missing: video not found" and surfaced as
+                        // "No Links Found" even though the video plays in a browser.
+                        val wrap: (ExtractorLink) -> Unit = { link ->
+                            emitted.set(true)
+                            callback(link)
+                        }
+
+                        withContext(Dispatchers.IO) {
+                            if (loadExtractor(fixedUrl, data, subtitleCallback, wrap)) {
+                                return@withContext true
+                            }
+
+                            when {
+                                isMorenciusFamily(fixedUrl) ->
+                                    Morencius().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                                isYstreamFamily(fixedUrl) ->
+                                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                                else -> android.util.Log.e(TAG, "no extractor claimed $fixedUrl")
+                            }
+                        }
+                        if (emitted.get()) return true
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Extractor error for $fixedUrl: ${e.message}", e)
+                    }
                 }
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Extractor error for $fixedUrl: ${e.message}", e)
+                android.util.Log.e(TAG, "no iframe of ${preferred.size} produced a link for $data")
+                return false
             }
-        }
-        return true
-    }
 
     /**
      * Byse/ystream embeds always carry a short alphanumeric code on an /e/<code>
-     * or /d/<code> path. Match on that shape plus the known host words, so the
-     * family is still recognised after the domain rotates.
+     * or /d/<code> path. This runs only after loadExtractor declines, so the shape
+     * means "unclaimed host, Byse-shaped path" - which is how a rotated domain
+     * is still recognised without hijacking a built-in host.
      */
     private fun isYstreamFamily(url: String): Boolean {
         val host = url.substringAfter("://", "").substringBefore('/').lowercase()
