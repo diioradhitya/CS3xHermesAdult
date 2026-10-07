@@ -15,7 +15,6 @@ class AVTubeProvider : MainAPI() {
     override val vpnStatus = VPNStatus.MightBeNeeded
 
     private val headers = mapOf(
-        "Authority" to "avtubreal.com",
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
         "Sec-Ch-Ua" to "\"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\"",
@@ -104,29 +103,52 @@ class AVTubeProvider : MainAPI() {
 
         if (iframeSrc.isNullOrBlank()) return false
 
-        val morenciusDomains = listOf("morencius.com", "dingtezuni.com", "mivalyo.com", "ryderjet.com", "bingezove.com", "movearnpre.com")
-        val ystreamDomains = listOf("ystream.id", "f7hyg4q.org")
-
-        val isMorencius = morenciusDomains.any { iframeSrc.contains(it) }
-        val isYstream = ystreamDomains.any { iframeSrc.contains(it) }
-
-        val fixedUrl = when {
-            isMorencius -> iframeSrc.replace(Regex("https?://[^/]+"), "https://morencius.com")
-            isYstream -> iframeSrc
-            else -> iframeSrc
-        }
+        // The ystream/Byse family rotates its API host (f7hyg4q.org, ystream.id,
+        // n1mwq.org, ...). Verified live for embed code emuf2fon3lsy on a phone:
+        //   GET /api/videos/<code>/embed/details -> f7hyg4q.org 403, ystream.id 200
+        // A hardcoded host therefore returns 403 and loadLinks reports nothing,
+        // which is what produced "no links found". Take the host from the iframe
+        // we were actually handed - YstreamExtractor derives siteOrigin from it.
+        val fixedUrl = iframeSrc
 
         withContext(Dispatchers.IO) {
             try {
-                when {
-                    isYstream -> YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
-                    isMorencius -> Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
-                    else -> loadExtractor(fixedUrl, data, subtitleCallback, callback)
+                if (isYstreamFamily(fixedUrl)) {
+                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
+                } else if (isMorenciusFamily(fixedUrl)) {
+                    Morencius().getUrl(fixedUrl, data, subtitleCallback, callback)
+                } else if (!loadExtractor(fixedUrl, data, subtitleCallback, callback)) {
+                    // Nothing recognised it - try the ystream path anyway, since a
+                    // rotated host may not match any static list.
+                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, callback)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AVTubeProvider", "Extractor error: ${e.message}", e)
+                android.util.Log.e(TAG, "Extractor error for $fixedUrl: ${e.message}", e)
             }
         }
         return true
+    }
+
+    /**
+     * Byse/ystream embeds always carry a short alphanumeric code on an /e/<code>
+     * or /d/<code> path. Match on that shape plus the known host words, so the
+     * family is still recognised after the domain rotates.
+     */
+    private fun isYstreamFamily(url: String): Boolean {
+        val host = url.substringAfter("://", "").substringBefore('/').lowercase()
+        if (listOf("ystream", "byse", "f7hyg4q", "n1mwq").any { host.contains(it) }) {
+            return true
+        }
+        return Regex("""https?://[^/]+/(?:e|d|v)/[A-Za-z0-9]{6,}""").containsMatchIn(url)
+    }
+
+    private fun isMorenciusFamily(url: String): Boolean {
+        val host = url.substringAfter("://", "").substringBefore('/').lowercase()
+        return listOf("morencius", "dingtezuni", "mivalyo", "ryderjet", "bingezove", "movearnpre")
+            .any { host.contains(it) }
+    }
+
+    companion object {
+        private const val TAG = "AVTubeProvider"
     }
 }

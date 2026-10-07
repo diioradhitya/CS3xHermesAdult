@@ -1,4 +1,4 @@
-version = 15
+version = 18
 
 cloudstream {
     authors     = listOf("Dio R")

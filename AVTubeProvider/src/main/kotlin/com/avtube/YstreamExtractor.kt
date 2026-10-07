@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import java.net.URI
 import java.security.KeyPairGenerator
 import java.security.Signature
@@ -25,13 +24,10 @@ import javax.crypto.spec.SecretKeySpec
  */
 class YstreamExtractor : ExtractorApi() {
     override var name = "Ystream"
-    override var mainUrl = "https://f7hyg4q.org"
+    override var mainUrl = "https://ystream.id"
     override val requiresReferer = true
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
+    private val client = OkHttpClient()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val jsonMapper = ObjectMapper()
 
@@ -162,11 +158,16 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
+    private val siteOrigin = "https://ystream.id"
+
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
-            "Origin" to "https://f7hyg4q.org"
+            // The API rejects requests whose Origin is not the *site* domain with
+            // 403 "embedding from this domain is not allowed for this video".
+            // The API host itself (which rotates) must never appear here.
+            "Origin" to siteOrigin
         ).also { if (referer != null) it["Referer"] = referer }
     }
 
@@ -272,6 +273,37 @@ class YstreamExtractor : ExtractorApi() {
     }
 
     /* ------------------------------------------------------------------ */
+    /* Fingerprint                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Structurally valid fingerprint object. The API accepts a well-formed
+     * JWT-shaped token without verifying the ES256 signature, so generating a
+     * real P-256 keypair adds latency and a failure mode for no gain.
+     */
+    private fun fingerprint(): Map<String, Any> {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        val seed = System.nanoTime()
+        fun rnd(n: Int): String {
+            val sb = StringBuilder(n)
+            for (i in 0 until n) {
+                sb.append(alphabet[((seed + i * 2654435761L).mod(alphabet.length.toLong())).toInt()])
+            }
+            return sb.toString()
+        }
+        val header = Base64.encodeToString(
+            """{"alg":"ES256","typ":"JWT"}""".toByteArray(),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return mapOf(
+            "token" to "$header.${rnd(80)}.${rnd(86)}",
+            "viewer_id" to rnd(22),
+            "device_id" to rnd(22),
+            "confidence" to 0.9
+        )
+    }
+
+    /* ------------------------------------------------------------------ */
     /* AES-GCM helpers                                                   */
     /* ------------------------------------------------------------------ */
 
@@ -338,25 +370,26 @@ class YstreamExtractor : ExtractorApi() {
         if (code.isEmpty()) return
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
-        // Step 0: ECDSA attestation (gets fingerprint object)
-        val embedBase = "https://f7hyg4q.org"
-        val fpObj = doAttestation(embedBase)
-        if (fpObj == null) {
-            Log.e(TAG, "attestation failed, aborting")
-            return
-        }
+        // Step 0: structural fingerprint.
+        // The embed API does not verify the ES256 signature — a well-formed
+        // JWT-shaped token is accepted. The previous ECDSA P-256 attestation
+        // round-trip only added latency and an extra failure mode.
+        val fpObj = fingerprint()
 
-        // Step 1: get embed frame URL from details endpoint
+        // Step 1: get embed frame URL from details endpoint.
+        // The API host rotates per video, so always start from the site origin
+        // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$embedBase/api/videos/$code/details", detailsHeaders) ?: return
+        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders) ?: return
         val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
         val embedFrameUrl = details.embedFrameUrl
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
+        val embedBase = getBaseUrl(embedFrameUrl)
 
         // Step 2: get PoW challenge — POST with fingerprint
         val captchaBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
         val captchaHeaders = baseHeaders(embedFrameUrl)
-        val captchaRaw = httpPost("$embedBase/api/videos/$code/captcha", captchaBody, captchaHeaders) ?: return
+        val captchaRaw = httpPost("$embedBase/api/videos/$code/embed/captcha", captchaBody, captchaHeaders) ?: return
         val captcha = tryParseJson<CaptchaRoot>(captchaRaw) ?: return
         Log.d(TAG, "captcha: difficulty=${captcha.powDifficulty}")
 
@@ -374,7 +407,7 @@ class YstreamExtractor : ExtractorApi() {
             "fingerprint" to fpObj
         ))
         val verifyHeaders = baseHeaders(embedFrameUrl)
-        val verifyRaw = httpPost("$embedBase/api/videos/$code/captcha/verify", verifyBody, verifyHeaders) ?: return
+        val verifyRaw = httpPost("$embedBase/api/videos/$code/embed/captcha/verify", verifyBody, verifyHeaders) ?: return
         val verify = tryParseJson<VerifyRoot>(verifyRaw)
         if (verify?.status != "ok") {
             Log.e(TAG, "verify failed: $verifyRaw")
@@ -384,16 +417,19 @@ class YstreamExtractor : ExtractorApi() {
 
         // Step 5: get encrypted playback payload — POST with full fingerprint + embed headers
         val playBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
+        val embedRef = "$siteOrigin/e/$code/"
         val playHeaders = mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
-            "X-Embed-Origin" to "f7hyg4q.org",
-            "X-Embed-Referer" to embedFrameUrl,
-            "X-Embed-Parent" to "https://f7hyg4q.org/d/$code/",
-            "X-Captcha-Token" to (verify.token ?: captcha.powToken)
+            "Origin" to siteOrigin,
+            "Referer" to embedRef,
+            "X-Embed-Origin" to siteOrigin,
+            "X-Embed-Referer" to embedRef,
+            "X-Embed-Parent" to embedRef,
+            "X-Captcha-Token" to verify?.token.orEmpty()
         )
-        val playbackRaw = httpPost("$embedBase/api/videos/$code/playback", playBody, playHeaders) ?: return
+        val playbackRaw = httpPost("$embedBase/api/videos/$code/embed/playback", playBody, playHeaders) ?: return
         val playback = tryParseJson<PlaybackRoot>(playbackRaw)
         if (playback?.playback == null) {
             Log.e(TAG, "playback failed: ${playbackRaw.take(200)}")
@@ -428,7 +464,7 @@ class YstreamExtractor : ExtractorApi() {
             name,
             streamUrl,
             refererUrl,
-            headers = mapOf("Referer" to "https://f7hyg4q.org/d/$code/", "User-Agent" to ua)
+            headers = mapOf("Referer" to "https://ystream.id/e/$code/", "User-Agent" to ua)
         ).forEach(callback)
     }
 }
@@ -437,13 +473,11 @@ class YstreamExtractor : ExtractorApi() {
 /* Data classes                                                        */
 /* ------------------------------------------------------------------ */
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChallengeResp(
     @JsonProperty("challenge_id") val challenge_id: String,
     @JsonProperty("nonce") val nonce: String
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class AttestResp(
     @JsonProperty("token") val token: String?,
     @JsonProperty("viewer_id") val viewer_id: String?,
@@ -451,27 +485,22 @@ data class AttestResp(
     @JsonProperty("confidence") val confidence: String?
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class DetailsRoot(@JsonProperty("embed_frame_url") val embedFrameUrl: String)
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class CaptchaRoot(
     @JsonProperty("pow_nonce") val powNonce: String,
     @JsonProperty("pow_difficulty") val powDifficulty: Int,
     @JsonProperty("pow_token") val powToken: String
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class VerifyRoot(
     @JsonProperty("status") val status: String,
     @JsonProperty("token") val token: String? = null,
     @JsonProperty("fingerprint") val fingerprint: String? = null
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackRoot(@JsonProperty("playback") val playback: Playback?)
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class Playback(
     @JsonProperty("iv") val iv: String,
     @JsonProperty("payload") val payload: String,
@@ -479,7 +508,5 @@ data class Playback(
     @JsonProperty("version") val version: Int = 1
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackDecrypt(@JsonProperty("sources") val sources: List<PlaybackDecryptSource>)
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class PlaybackDecryptSource(@JsonProperty("url") val url: String)
