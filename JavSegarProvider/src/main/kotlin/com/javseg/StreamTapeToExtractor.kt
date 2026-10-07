@@ -71,16 +71,17 @@ class StreamTapeToExtractor : ExtractorApi() {
 
         Log.d(TAG, "resolved $id -> ${media.take(70)}...")
 
-        // CloudStream's signature is POSITIONAL:
-        //   newExtractorLink(source, name, url, type, initializer)
-        // Passing the media URL as `source` leaves `url` holding the embed
-        // HTML page, the player gets markup instead of a stream and reports
-        // "encoding error 3002". `source` must be the extractor label.
+        // get_video answers 302 to a plain MP4 (625 MB, seekable, moov near the
+        // front). Do NOT force ExtractorLinkType.M3U8 here: that hands the URL
+        // to the HLS playlist loader, which then receives an MP4 and fails to
+        // decode it — the player reports "encoding error 3002". CloudStream's
+        // own StreamTape extractor leaves the type at its INFER_TYPE default
+        // and lets the player pick by extension, which is what this does.
         val link = newExtractorLink(
             name,
             name,
             media,
-            ExtractorLinkType.M3U8,
+            INFER_TYPE,
         ) {
             headers = mapOf(
                 "User-Agent" to USER_AGENT,
