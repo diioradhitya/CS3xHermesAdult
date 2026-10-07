@@ -194,17 +194,21 @@
             "Dio R"
         ],
         "language": "id",
-        "status": 1,
+        "status": 2,
         "tvTypes": [
             "NSFW"
         ],
         "iconUrl": "https://javdoe.sh/logo/javdoe.png",
         "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavdoeProvider.cs3",
-        "version": 1,
+        "version": 2,
         "fileSize": 37092,
-        "fileHash": "sha256-4f3cf05349283133fe84d302033bd6b00389f1bb0cc2390d45247a9f599c46fa",
+        "fileHash": "sha256-1c42ff91c079c49596c84aa545884dade03454b654d3083d2881fd414b7bd551",
         "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-        "apiVersion": 1
+        "apiVersion": 1,
+        "allowedDomains": [
+            "javdoe.sh",
+            "server.javdoe.sh"
+        ]
     },
     {
         "iconUrl": "https://javtiful.com/uploads/site/icon/2026/04/27/new_jt_icon.png",

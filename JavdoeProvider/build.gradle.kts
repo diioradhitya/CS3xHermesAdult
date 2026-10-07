@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors     = listOf("Dio R")
@@ -8,5 +8,5 @@ cloudstream {
     /**
      * Status int as string: "1" = beta, "2" = working, "3" = broken
      */
-    status = 1
+    status = 2
 }
