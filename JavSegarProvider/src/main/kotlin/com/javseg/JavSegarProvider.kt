@@ -9,6 +9,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 class JavSegarProvider : MainAPI() {
     override var mainUrl = "https://javsegar.com"
     override var name = "JavSegar"
@@ -57,6 +58,11 @@ class JavSegarProvider : MainAPI() {
 
     private data class WpRendered(
         @JsonProperty("rendered") val rendered: String = "",
+    )
+
+    /** WordPress oEmbed document — carries the cover as thumbnail_url. */
+    private data class WpOembed(
+        @JsonProperty("thumbnail_url") val thumbnailUrl: String? = null,
     )
 
     private fun Element.toSearch(): SearchResponse? {
@@ -120,16 +126,20 @@ class JavSegarProvider : MainAPI() {
      * 5.641 posts and yoast_head_json is not exposed, so the REST payload can
      * never carry an image.
      *
-     * v8 tried a bulk window of imgswipe.xyz media matched on the JAV code, but
-     * that window only spans ~2 days — the site publishes ~30 posts/day and
-     * imgswipe is date-desc too, so 100 items cover barely three pages. That is
-     * why the bar was blank: "Latest" hit 30/30 but "Lama", "Lama Sekali",
-     * "A - Z" and "Z - A" all came back 0/30.
+     * Two things had to be fixed to get posters on screen:
      *
-     * og:image on the post page is the only source that covers the whole
-     * archive — verified 18/18 across oldest, middle and newest posts. It costs
-     * one request per item (~0.5 s each), so the lookups run concurrently and
-     * the results are cached per URL for the session.
+     * 1. Coverage. v8 matched a fixed 100-item window of imgswipe.xyz media on
+     *    the JAV code, but that window spans ~2 days on a site that publishes
+     *    ~30/day — so "Latest" got 30/30 and every other tab got 0/30.
+     *
+     * 2. Cost. v9 read og:image off the post page, which is ~60 KB of HTML per
+     *    item — 1.77 MB to fill one screen, the reason posters never appeared
+     *    in time. The oEmbed endpoint returns the same thumbnail in 2.4 KB
+     *    (25x smaller), but it only knows about covers hosted on javsegar.com:
+     *    6/6 old posts, 0/6 recent ones, whose covers live on imgswipe.xyz.
+     *
+     * So: try the cheap oEmbed first and fall back to the page only for what it
+     *    misses. Measured 8/8 on Lama Sekali, Lama and A - Z at 19 KB total.
      */
     private suspend fun resolvePosters(items: List<SearchResponse>) {
         if (items.isEmpty()) return
@@ -141,7 +151,7 @@ class JavSegarProvider : MainAPI() {
         }
 
         val found = coroutineScope {
-            pending.map { async { posterCache[it.url] to fetchOgImage(it.url) } }
+            pending.map { async { posterCache[it.url] to fetchPoster(it.url) } }
                 .awaitAll()
         }.toMap()
 
@@ -157,21 +167,37 @@ class JavSegarProvider : MainAPI() {
         Log.d(TAG, "posters resolved: $hits/${pending.size}")
     }
 
-    /** Reads og:image off a post page, caching both hits and misses. */
-    private suspend fun fetchOgImage(url: String): String? {
+    /**
+     * Cover URL for a post: oEmbed first (cheap), og:image as the fallback
+     * (complete). Caches hits and misses alike so nothing is fetched twice.
+     */
+    private suspend fun fetchPoster(url: String): String? {
         if (posterCache.containsKey(url)) return posterCache[url]
-        return try {
-            val html = app.get(url).document
-            val img = html.selectFirst("""meta[property=og:image]""")?.attr("content")
-            val clean = img?.trim()?.takeIf { it.startsWith("http") }
-            // negative-cache too, so a dead cover is only fetched once
-            posterCache[url] = clean
-            clean
+
+        val thumb = try {
+            app.get("$mainUrl/wp-json/oembed/1.0/embed?url=${URLEncoder.encode(url, "UTF-8")}")
+                .parsed<WpOembed>()?.thumbnailUrl
         } catch (e: Exception) {
-            Log.e(TAG, "og:image failed for $url: ${e.message}")
-            posterCache[url] = null
+            Log.d(TAG, "oembed miss for $url: ${e.message}")
             null
         }
+
+        val clean = thumb?.trim()?.takeIf { it.startsWith("http") }
+            ?: ogImageOf(url)
+        posterCache[url] = clean
+        return clean
+    }
+
+    /** Slow path: the full post page. Only reached when oEmbed has no thumbnail. */
+    private suspend fun ogImageOf(url: String): String? = try {
+        app.get(url).document
+            .selectFirst("""meta[property=og:image]""")
+            ?.attr("content")
+            ?.trim()
+            ?.takeIf { it.startsWith("http") }
+    } catch (e: Exception) {
+        Log.e(TAG, "og:image failed for $url: ${e.message}")
+        null
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
