@@ -203,14 +203,14 @@
     {
         "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
         "status": 2,
-        "version": 18,
+        "version": 19,
         "name": "AVTube",
         "internalName": "AVTubeProvider",
         "authors": [
             "Dio R"
         ],
         "description": "AVTube - Indonesian adult streaming (fixed Morencius+EarnVids m3u8, Ystream verified)",
-        "fileSize": 41754,
+        "fileSize": 42142,
         "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
         "language": "id",
         "tvTypes": [
@@ -218,7 +218,7 @@
         ],
         "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
         "apiVersion": 1,
-        "fileHash": "sha256-b547609fe8ab48b3ff8e308c7f57bddac288a4264a0d207f81adc4b7c739f8b7"
+        "fileHash": "sha256-ec87f5482677b7985ceab4555b799e4e1304aba41ff99a4f59cee31146e275ee"
     },
     {
         "iconUrl": "https://nekopoi.care/wp-content/uploads/2022/07/favicon.png",

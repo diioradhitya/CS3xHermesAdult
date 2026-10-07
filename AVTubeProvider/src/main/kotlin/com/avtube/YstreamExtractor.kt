@@ -3,6 +3,7 @@ package com.avtube
 import android.util.Base64
 import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -380,9 +381,22 @@ class YstreamExtractor : ExtractorApi() {
         // The API host rotates per video, so always start from the site origin
         // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders) ?: return
-        val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
+        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders)
+        if (detailsRaw.isNullOrBlank()) {
+            Log.e(TAG, "details: empty response for code=$code")
+            return
+        }
+        Log.d(TAG, "details raw (${detailsRaw.length} B): ${detailsRaw.take(400)}")
+        val details = tryParseJson<DetailsRoot>(detailsRaw)
+        if (details == null) {
+            Log.e(TAG, "details: could not parse for code=$code")
+            return
+        }
         val embedFrameUrl = details.embedFrameUrl
+        if (embedFrameUrl.isNullOrBlank()) {
+            Log.e(TAG, "details: no embed_frame_url for code=$code")
+            return
+        }
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
         val embedBase = getBaseUrl(embedFrameUrl)
 
@@ -485,7 +499,10 @@ data class AttestResp(
     @JsonProperty("confidence") val confidence: String?
 )
 
-data class DetailsRoot(@JsonProperty("embed_frame_url") val embedFrameUrl: String)
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class DetailsRoot(
+    @JsonProperty("embed_frame_url") val embedFrameUrl: String? = null,
+)
 
 data class CaptchaRoot(
     @JsonProperty("pow_nonce") val powNonce: String,
