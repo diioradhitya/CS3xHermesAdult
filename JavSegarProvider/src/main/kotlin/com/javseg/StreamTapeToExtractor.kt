@@ -71,10 +71,15 @@ class StreamTapeToExtractor : ExtractorApi() {
 
         Log.d(TAG, "resolved $id -> ${media.take(70)}...")
 
+        // CloudStream's signature is POSITIONAL:
+        //   newExtractorLink(source, name, url, type, initializer)
+        // Passing the media URL as `source` leaves `url` holding the embed
+        // HTML page, the player gets markup instead of a stream and reports
+        // "encoding error 3002". `source` must be the extractor label.
         val link = newExtractorLink(
-            media,
             name,
-            refererPage,
+            name,
+            media,
             ExtractorLinkType.M3U8,
         ) {
             headers = mapOf(

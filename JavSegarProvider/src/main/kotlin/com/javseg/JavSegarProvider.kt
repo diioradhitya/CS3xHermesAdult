@@ -4,6 +4,9 @@ import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 class JavSegarProvider : MainAPI() {
@@ -13,6 +16,13 @@ class JavSegarProvider : MainAPI() {
     override var hasMainPage = true
     override val hasDownloadSupport = true
     override var supportedTypes = setOf(TvType.NSFW)
+
+    /**
+     * Post URL -> cover URL. Covers both hits and misses so re-opening the
+     * same tab does not re-fetch, and a post without a cover is only ever
+     * requested once.
+     */
+    private val posterCache = HashMap<String, String?>()
 
     override val mainPage = mainPageOf(
         "rest:posts?orderby=date&order=desc" to "Latest",
@@ -47,10 +57,6 @@ class JavSegarProvider : MainAPI() {
 
     private data class WpRendered(
         @JsonProperty("rendered") val rendered: String = "",
-    )
-
-    private data class WpMedia(
-        @JsonProperty("source_url") val sourceUrl: String? = null,
     )
 
     private fun Element.toSearch(): SearchResponse? {
@@ -111,42 +117,61 @@ class JavSegarProvider : MainAPI() {
 
     /**
      * javsegar.com has an empty media library: featured_media is 0 for all
-     * 5.641 posts and yoast_head_json is not exposed. The cover files are served
-     * from imgswipe.xyz, a sibling WordPress whose media library does hold them,
-     * named "<CODE>-<timestamp>.jpg" (e.g. SONE-881-e1791260349266.jpg).
+     * 5.641 posts and yoast_head_json is not exposed, so the REST payload can
+     * never carry an image.
      *
-     * So instead of 30 og:image requests per page we pull one page of media
-     * (100 items) from that host and match on the JAV code in the title.
-     * Verified 10/10 against the live site.
+     * v8 tried a bulk window of imgswipe.xyz media matched on the JAV code, but
+     * that window only spans ~2 days — the site publishes ~30 posts/day and
+     * imgswipe is date-desc too, so 100 items cover barely three pages. That is
+     * why the bar was blank: "Latest" hit 30/30 but "Lama", "Lama Sekali",
+     * "A - Z" and "Z - A" all came back 0/30.
+     *
+     * og:image on the post page is the only source that covers the whole
+     * archive — verified 18/18 across oldest, middle and newest posts. It costs
+     * one request per item (~0.5 s each), so the lookups run concurrently and
+     * the results are cached per URL for the session.
      */
     private suspend fun resolvePosters(items: List<SearchResponse>) {
-        val wanted = items.mapNotNull { item ->
-            val code = CODE.find(item.name)?.groupValues?.get(1)?.uppercase() ?: return@mapNotNull null
-            item to code
-        }
-        if (wanted.isEmpty()) return
+        if (items.isEmpty()) return
 
-        val byCode = try {
-            app.get("$IMGSWIPE/wp-json/wp/v2/media?per_page=100&orderby=date&order=desc&_fields=source_url")
-                .parsed<Array<WpMedia>>()
-                ?.mapNotNull { m ->
-                    val url = m.sourceUrl ?: return@mapNotNull null
-                    CODE.find(url.substringAfterLast('/'))?.groupValues?.get(1)?.uppercase() to url
-                }?.toMap()
-                ?: return
-        } catch (e: Exception) {
-            Log.e(TAG, "poster lookup failed: ${e.message}")
+        val pending = items.filter { it.url !in posterCache }
+        if (pending.isEmpty()) {
+            items.forEach { posterCache[it.url]?.let { p -> it.posterUrl = p } }
             return
         }
 
+        val found = coroutineScope {
+            pending.map { async { posterCache[it.url] to fetchOgImage(it.url) } }
+                .awaitAll()
+        }.toMap()
+
         var hits = 0
-        for ((item, code) in wanted) {
-            byCode[code]?.let {
-                item.posterUrl = it
+        for (item in pending) {
+            val poster = found[item.url]
+            if (!poster.isNullOrBlank()) {
+                posterCache[item.url] = poster
+                item.posterUrl = poster
                 hits++
             }
         }
-        Log.d(TAG, "posters resolved: $hits/${items.size}")
+        Log.d(TAG, "posters resolved: $hits/${pending.size}")
+    }
+
+    /** Reads og:image off a post page, caching both hits and misses. */
+    private suspend fun fetchOgImage(url: String): String? {
+        if (posterCache.containsKey(url)) return posterCache[url]
+        return try {
+            val html = app.get(url).document
+            val img = html.selectFirst("""meta[property=og:image]""")?.attr("content")
+            val clean = img?.trim()?.takeIf { it.startsWith("http") }
+            // negative-cache too, so a dead cover is only fetched once
+            posterCache[url] = clean
+            clean
+        } catch (e: Exception) {
+            Log.e(TAG, "og:image failed for $url: ${e.message}")
+            posterCache[url] = null
+            null
+        }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -235,11 +260,5 @@ class JavSegarProvider : MainAPI() {
 
     companion object {
         private const val TAG = "JavSegar"
-
-        /** Sibling WordPress that actually hosts the cover files. */
-        private const val IMGSWIPE = "https://imgswipe.xyz"
-
-        /** JAV code, e.g. SONE-881 — the key that links a title to its cover. */
-        private val CODE = Regex("""\b([A-Za-z]{3,6}-\d{2,4})\b""")
     }
 }
