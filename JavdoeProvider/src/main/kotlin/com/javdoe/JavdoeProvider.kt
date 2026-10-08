@@ -116,14 +116,19 @@ class JavdoeProvider : MainAPI() {
             val html = doc.html()
             Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
 
-            // logcat truncates one entry at ~4 KB, so print the first cards rather than the
-            // whole document - and only while something is still wrong.
-            val cards = doc.select(POST_SELECTOR)
-            Log.d(TAG, "PROBE cards=" + cards.size)
-            for (i in 0 until minOf(2, cards.size)) {
-                Log.d(TAG, "CARD[$i] " + cards[i].outerHtml().replace(Regex("\\s+"), " "))
-            }
-            Log.d(TAG, "PROBE hrefs=" + doc.select("a[href]").map { it.attr("href") }.take(30).joinToString(" | "))
+            // logcat truncates one entry at ~4 KB, so print the first candidates rather than
+            // the whole document - and only while something is still wrong.
+            // Measured on the device: .col-sm-6 (24 of them) are ad slots carrying
+            // data-cl-spot, not cards. The real containers are the .video* ones.
+            listOf(".video", ".video-thumb", ".thumbnail", ".videos", ".panel-padding")
+                .forEach { sel ->
+                    val els = doc.select(sel)
+                    Log.d(TAG, "PROBE sel=[$sel] n=" + els.size)
+                    if (els.isNotEmpty()) {
+                        Log.d(TAG, "EL0[$sel] " + els[0].outerHtml().replace(Regex("\\s+"), " ").take(1800))
+                    }
+                }
+            Log.d(TAG, "PROBE hrefs=" + doc.select("a[href]").map { it.attr("href") }.take(40).joinToString(" | "))
             Log.d(TAG, "MAIN-HTML-END")
         }
 
