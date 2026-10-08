@@ -82,18 +82,26 @@ class JavdoeProvider : MainAPI() {
         }
 
         /**
-     * One listing card. Measured on the live homepage 2026-10-08: the site has no `article`
-     * element at all. 24 cards are `.col-sm-6` wrappers, each holding a `.video` block with
-     * `.video-thumb > a > img.thumbnail` for the cover and `.panel-padding > a` for the title.
-     * Probe output for reference: sel=[.col-sm-6] matches=24, sel=[article] matches=0.
+     * One listing card. Measured on the device 2026-10-08 against the ajax response:
+     *
+     *   <ul class="videos videosf">
+     *     <li id="video-287060">
+     *       <div class="video">
+     *         <a href="/287060/mosaic-pgd-494-3d-beautiful-picture-nude-biera-kaori-blu-ray-disc-\u00a0/"
+     *            title="Mosaic PGD-494 3D Beautiful Picture Nude Biera Kaori..." class="thumbnail">
+     *           ... <img src=...>
+     *         <div class="video-title">...</div>
+     *
+     * The anchor itself carries href, title and class=thumbnail, so it is the only element that
+     * needs reading; `.video-title` is only a fallback for a card whose anchor lacks title=.
      */
     private fun Element.toSearch(): SearchResponse? {
-        val a = selectFirst("a[href]") ?: return null
+        val a = selectFirst("a.thumbnail[href], a[href]") ?: return null
         val href = a.attr("href").trim()
         if (href.isBlank()) return null
 
         val title = a.attr("title").trim()
-            .ifBlank { selectFirst(".panel-padding a[href], .panel-padding")?.text()?.trim().orEmpty() }
+            .ifBlank { selectFirst(".video-title")?.text()?.trim().orEmpty() }
             .ifBlank { a.text().trim() }
         if (title.isBlank()) return null
 
@@ -114,55 +122,58 @@ class JavdoeProvider : MainAPI() {
         }
     }
 
-    private suspend fun listPosts(url: String): List<SearchResponse> {
-        val doc = get(url) ?: return emptyList()
+    /**
+     * The homepage is a shell: every grid container is a shimmer placeholder
+     * (`.video-thumb.sk-pulse`, `.fp-sk-line`) and the real markup is fetched per section by
+     * `fetch('?ajax=fp_section&s=' + section)`. So the listing has to come from that endpoint.
+     *
+     * Verified responses (device log, tag Javdoe):
+     *   ?ajax=fp_section&s=javdoe   {"status":0,"html":"","pagination":"","total":0}
+     *   ?ajax=fp_section&s=watched   {"status":1,"html":"<ul class=\"videos videosf\">...","pagination":"","total":48}
+     *   links parsed from watched = 97, from engsub/bigtit/titfuk/mature/javhd = 27 each
+     *
+     * The section list comes from the sk- and fc- prefixed id pairs in the shell markup.
+     */
+    private val sections = listOf("watched", "engsub", "bigtit", "titfuk", "mature", "javhd")
 
-        // Dump the structural markers once: a "0 items" result is always a selector that no
-        // longer matches, and the only way to see the real markup is to print it from inside
-        // the app - a host or adb-shell fetch is outside the split tunnel and gets the ISP
-        // blockpage instead of the site.
-        if (!dumpedMain) {
-            dumpedMain = true
-            val html = doc.html()
-            Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
-
-            // The grid is rendered client-side, so this document carries only shell markup.
-                        // Measured from the device (v8):
-                        //   EL0[.video] <div class="video"><div class="thumbnail fp-sk-card">
-                        //               <div class="video-thumb fp-sk-img sk-pulse"></div>
-                        //               <span class="fp-sk-line sk-pulse" ...></span> ...
-                        // v9 located the loader that fills it:
-                        //   PROBE pat[fetch(...)] = fetch('?ajax=fp_section&s=' + section, ...)
-                        //   PROBE ids = sk-watched | fc-watched | sk-engsub | fc-engsub | sk-bigtit ...
-                        // sk-* is the shimmer, fc-* is where the fetched markup is injected.
-                        // So ask the endpoint what each section returns before writing a parser.
-                        for (section in listOf("javdoe", "watched", "engsub", "bigtit", "titfuk", "mature", "javhd")) {
-                            val body = getText("$base/?ajax=fp_section&s=$section")
-                            if (body == null) { Log.d(TAG, "AJAX $section -> null"); continue }
-                            Log.d(TAG, "AJAX $section len=" + body.length + " head=" +
-                                body.replace(Regex("\\s+"), " ").take(300))
-                            val parsed = org.jsoup.parser.Parser.parse(body, "$base/")
-                            Log.d(TAG, "AJAX $section links=" + parsed.select("a[href]").size + " classes=" +
-                                parsed.select("[class]").map { it.attr("class") }
-                                    .flatMap { it.split(" ") }.filter { it.isNotBlank() }.distinct().take(12).joinToString(","))
-                        }
+    private suspend fun sectionPosts(section: String): List<SearchResponse> {
+        val body = getText("$base/?ajax=fp_section&s=$section") ?: return emptyList()
+        val html = jsonString(body, "html") ?: run {
+            Log.e(TAG, "$section: no html field")
+            return emptyList()
         }
+        val parsed = org.jsoup.parser.Parser.parse(html, "$base/")
+        val items = parsed.select("li[id^=video-]").mapNotNull { it.toSearch() }
+        Log.d(TAG, "section $section -> ${items.size} items, " +
+            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster")
+        return items
+    }
 
-        val results = doc.select(POST_SELECTOR).mapNotNull { it.toSearch() }
-        Log.d(TAG, "listPosts $url -> ${results.size} items")
-        return results
+    /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
+    private suspend fun searchPosts(url: String): List<SearchResponse> {
+        val doc = get(url) ?: return emptyList()
+        val items = doc.select("li[id^=video-]").mapNotNull { it.toSearch() }
+        Log.d(TAG, "search $url -> ${items.size} items")
+        return items
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val route = if (page <= 1) base else "$base/page/$page/"
-        val items = listPosts(route)
-        Log.d(TAG, "main page $page -> ${items.size} items, " +
-            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster")
+        // The shell has no items of its own; each section has to be fetched, and page 1 is the
+        // only page worth building - the endpoint returns a fixed set with its own pagination
+        // markup that CloudStream's page model does not consume.
+        val items = if (page <= 1) {
+            sections.flatMap { sectionPosts(it) }
+                .distinctBy { it.url }
+                .also { list ->
+                    Log.d(TAG, "main page 1 -> ${list.size} items, " +
+                        "${list.count { !it.posterUrl.isNullOrBlank() }} with poster")
+                }
+        } else emptyList()
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> =
-        listPosts("$base/?s=${query.trim().replace(" ", "+")}")
+        searchPosts("$base/?s=${query.trim().replace(" ", "+")}")
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = get(url) ?: return null
@@ -288,12 +299,19 @@ class JavdoeProvider : MainAPI() {
     companion object {
         private const val TAG = "Javdoe"
 
-        /** 24 cards on the live homepage. There is no `article` element on this site. */
-        private const val POST_SELECTOR = ".col-sm-6"
-
-        /** Kept for the one-shot dump below; the site is a Bootstrap 3 grid, not WordPress. */
-        private val CANDIDATE_SELECTORS = listOf(".col-sm-6", ".video", ".video-thumb")
-
-        private var dumpedMain = false
+        /**
+                 * The endpoint answers with JSON whose "html" value is itself a markup fragment, escaped
+                 * (`\/` for /, `\u00a0` for the non-breaking space inside titles). Pull that value out by
+                 * key before jsoup ever sees it. The lookahead on `[,}]` is what stops the lazy match from
+                 * ending on a quote that appears inside the fragment itself.
+                 */
+                private fun jsonString(json: String, key: String): String? =
+                    Regex("\"" + Regex.escape(key) + "\"\\s*:\\s*\"(.*?)\"(?=\\s*[,}])", RegexOption.DOT_MATCHES_ALL)
+                        .find(json)
+                        ?.groupValues
+                        ?.get(1)
+                        ?.replace("\\/", "/")
+                        ?.replace("\\u00a0", " ")
+                        ?.replace("\\\"", "\"")
     }
 }
