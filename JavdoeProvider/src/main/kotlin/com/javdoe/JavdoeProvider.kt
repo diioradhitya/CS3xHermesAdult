@@ -97,8 +97,13 @@ class JavdoeProvider : MainAPI() {
      */
     private fun Element.toSearch(): SearchResponse? {
         val a = selectFirst("a.thumbnail[href], a[href]") ?: return null
+        // The fragment carries root-relative hrefs ("/287060/slug/"). Resolving against the
+        // document base turns them absolute; without it CloudStream requests
+        // "NONE/NONE/287060/..." and load() never runs.
         val href = a.attr("href").trim()
         if (href.isBlank()) return null
+        val url = fixUrl(href)
+        if (!url.startsWith("http")) return null
 
         val title = a.attr("title").trim()
             .ifBlank { selectFirst(".video-title")?.text()?.trim().orEmpty() }
@@ -117,7 +122,7 @@ class JavdoeProvider : MainAPI() {
             }
         }.trim()
 
-        return newMovieSearchResponse(title, href, TvType.NSFW) {
+        return newMovieSearchResponse(title, url, TvType.NSFW) {
             if (poster.startsWith("http")) posterUrl = poster
         }
     }
