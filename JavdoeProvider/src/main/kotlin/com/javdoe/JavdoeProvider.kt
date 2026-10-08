@@ -60,6 +60,20 @@ class JavdoeProvider : MainAPI() {
 
     private val base = "https://javdoe.sh"
 
+    /**
+     * Some hosts wrap the embed address in base64 rather than storing the plain url, so a src that
+     * decodes to something starting with http is unwrapped; anything else is returned untouched.
+     */
+    private fun unwrap(src: String): String {
+        if (src.startsWith("http") || src.startsWith("//") || src.startsWith("/")) return src
+        val decoded = try {
+            String(android.util.Base64.decode(src, android.util.Base64.DEFAULT))
+        } catch (e: IllegalArgumentException) {
+            return src
+        }
+        return if (decoded.startsWith("http")) decoded else src
+    }
+
     /** Resolve a possibly relative href against this provider's own base. */
     private fun absolute(href: String): String = when {
         href.startsWith("http") -> href
@@ -208,19 +222,35 @@ class JavdoeProvider : MainAPI() {
     }
 
     /**
-     * The site's own archive page, used to keep the home feed growing after the sections.
+     * The site's own archive, used to keep the home feed growing after the sections.
      *
-     * `$base/page/<n>/` is a guess about how the theme paginates, so every page logs its card count
-     * and the ids it parsed: a working archive is confirmed by that line, and the first page that
-     * comes back empty ends the feed.
+     * v15 measured `$base/page/<n>/` as a dead address: every page logged `0 cards`. What to try
+     * next is read off the shell instead of guessed, so each candidate is tried once and the
+     * result logged. The first shape that yields cards wins and the feed continues from it.
      */
     private suspend fun archivePosts(page: Int): List<SearchResponse> {
-        val doc = get("$base/page/$page/") ?: return emptyList()
-        val cards = doc.select("li[id^=video-]")
-        val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
-        Log.d(TAG, "archive page $page -> ${cards.size} cards, ${fresh.size} new, ids=" +
-            cards.joinToString(",") { it.attr("id").removePrefix("video-") })
-        return fresh
+        val candidates = listOf(
+            "$base/?ajax=fp_section&s=watched&paged=$page",
+            "$base/page/$page/",
+            "$base/?s=&paged=$page",
+            "$base/?ajax=fp_list&paged=$page"
+        )
+        for (url in candidates) {
+            val body = getText(url) ?: continue
+            // The section endpoint wraps markup in JSON; the plain pages serve markup directly.
+            val html = jsonString(body, "html")?.ifBlank { null } ?: body
+            val parsed = org.jsoup.parser.Parser.parse(html, "$base/")
+            val cards = parsed.select("li[id^=video-]")
+            if (cards.isEmpty()) {
+                Log.d(TAG, "archive p$page: $url -> 0 cards")
+                continue
+            }
+            val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
+            Log.d(TAG, "archive p$page: $url -> ${cards.size} cards, ${fresh.size} new, ids=" +
+                cards.joinToString(",") { it.attr("id").removePrefix("video-") })
+            return fresh
+        }
+        return emptyList()
     }
     /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
     private suspend fun searchPosts(url: String): List<SearchResponse> {
@@ -304,12 +334,19 @@ class JavdoeProvider : MainAPI() {
         val embedSrc = postDoc.selectFirst("iframe[src], iframe[data-src]")?.let { f ->
             f.attr("src").ifBlank { f.attr("data-src") }.trim()
         }?.ifBlank { null }
+            // The theme base64-wraps the embed address into the src instead of storing the plain
+            // url, so the value has to be decoded before it can be requested:
+            //   aHR0cHM6Ly9teWNsb3Vkei5jYy92L3E4eHhlNmVpNHhtcQ== -> https://mycloudz.cc/v/q8xxe6ei4xmq
+            // (v15 log: requesting the raw base64 as a path returned "404-meta-title".)
+            ?.let { unwrap(it) }
+            ?.ifBlank { null }
             ?.let { absolute(it) }
             ?: postDoc.selectFirst("[data-embed-url], [data-embed], [data-video-url], [data-iframe]")
                 ?.let { el ->
                     listOf("data-embed-url", "data-embed", "data-video-url", "data-iframe")
                         .firstNotNullOfOrNull { el.attr(it).ifBlank { null } }?.trim()
                 }
+                ?.let { unwrap(it) }
                 ?.let { absolute(it) }
             ?: Regex("""/embed/\d+/?/""").find(postDoc.html())
                 ?.value
