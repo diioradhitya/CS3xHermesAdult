@@ -42,6 +42,12 @@ class JavdoeProvider : MainAPI() {
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
+    // MainAPI.lang defaults to "en". filterProviderByPreferredMedia() keeps a provider only when
+    // hasUniversal || langs.contains(api.lang), so with provider language pinned to Indonesian
+    // an "en" provider is silently dropped from the home source list - while plugins that do
+    // declare lang = "id" survive. This must match plugins.json's "language": "id".
+    override var lang = "id"
+
     private val base = "https://javdoe.sh"
 
     private val headers = mapOf(

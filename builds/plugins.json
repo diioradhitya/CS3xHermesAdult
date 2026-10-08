@@ -200,9 +200,9 @@
         ],
         "iconUrl": "https://javdoe.sh/logo/javdoe.png",
         "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavdoeProvider.cs3",
-        "version": 3,
-        "fileSize": 38169,
-        "fileHash": "sha256-88228fbd43c44c28a1ebd647ed1408ca643fe4502cfa6d592dfd29648e12a7b6",
+        "version": 4,
+        "fileSize": 38268,
+        "fileHash": "sha256-a624d96e1502f6cfb8afac11110e312c6d0bf019239790d1a8243a9e798ef911",
         "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
         "apiVersion": 1,
         "allowedDomains": [
