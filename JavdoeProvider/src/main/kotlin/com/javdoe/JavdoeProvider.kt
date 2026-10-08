@@ -116,20 +116,29 @@ class JavdoeProvider : MainAPI() {
             val html = doc.html()
             Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
 
-            // logcat truncates one entry at ~4 KB, so print the first candidates rather than
-            // the whole document - and only while something is still wrong.
-            // Measured on the device: .col-sm-6 (24 of them) are ad slots carrying
-            // data-cl-spot, not cards. The real containers are the .video* ones.
-            listOf(".video", ".video-thumb", ".thumbnail", ".videos", ".panel-padding")
-                .forEach { sel ->
-                    val els = doc.select(sel)
-                    Log.d(TAG, "PROBE sel=[$sel] n=" + els.size)
-                    if (els.isNotEmpty()) {
-                        Log.d(TAG, "EL0[$sel] " + els[0].outerHtml().replace(Regex("\\s+"), " ").take(1800))
-                    }
-                }
-            Log.d(TAG, "PROBE hrefs=" + doc.select("a[href]").map { it.attr("href") }.take(40).joinToString(" | "))
-            Log.d(TAG, "MAIN-HTML-END")
+            // The grid is rendered client-side. Measured from the device (v8):
+            //   PROBE sel=[.video] n=54
+            //   EL0[.video] <div class="video"><div class="thumbnail fp-sk-card">
+            //               <div class="video-thumb fp-sk-img sk-pulse"></div>
+            //               <span class="fp-sk-line sk-pulse" ...></span> ...
+            // Every card is a skeleton placeholder (sk-pulse / fp-sk-*), so no selector
+            // can ever match real data in the raw HTML. Find the data source instead.
+            val scripts = doc.select("script[src]").map { it.attr("src") }
+            Log.d(TAG, "PROBE js=" + scripts.take(20).joinToString(" | "))
+            val inline = doc.select("script").filter { !it.attr("src").isNullOrBlank() }
+                .joinToString(" ") { it.data() }
+            for (pat in listOf("/api/[a-z0-9_/-]+", "/wp-json/[a-z0-9_/-]+", "ajaxurl",
+                               "action=[a-z_]+", "admin-ajax", "fetch\\([^)]{0,60}")) {
+                val hits = Regex(pat).findAll(inline + " " + doc.html()).map { it.value }.distinct().take(8)
+                Log.d(TAG, "PROBE pat[$pat]=" + hits.joinToString(" | "))
+            }
+            for (el in listOf("[data-id]", "[data-slug]", "[data-video]", "[data-url]", "[data-href]")) {
+                val els = doc.select(el)
+                Log.d(TAG, "PROBE attr $el n=" + els.size +
+                    (if (els.isNotEmpty()) " e0=" + els[0].attributes().asList().joinToString(",") { it.key + "=" + it.value.take(40) } else ""))
+            }
+            Log.d(TAG, "PROBE ids=" + doc.select("[id]").map { it.attr("id") }
+                .filter { it.isNotBlank() }.distinct().take(30).joinToString(" | "))
         }
 
         val results = doc.select(POST_SELECTOR).mapNotNull { it.toSearch() }
