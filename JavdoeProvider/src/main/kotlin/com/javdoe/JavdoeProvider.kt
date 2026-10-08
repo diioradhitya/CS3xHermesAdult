@@ -100,8 +100,29 @@ class JavdoeProvider : MainAPI() {
         // blockpage instead of the site.
         if (!dumpedMain) {
             dumpedMain = true
-            Log.d(TAG, "MAIN-HTML-BEGIN len=" + doc.html().length)
-            Log.d(TAG, "MAIN-HTML-BODY " + doc.html().replace(Regex("\\s+"), " ").take(4000))
+            val html = doc.html()
+            Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
+
+            // logcat truncates one entry at ~4 KB, which only ever covers <head>, so the
+            // document cannot be read out wholesale. Probe instead: count matches for each
+            // candidate container, and print the class names actually present. The host and
+            // `adb shell` are both outside the split tunnel and get the ISP blockpage, so this
+            // is the only place the real markup can be observed.
+            val classes = HashSet<String>()
+            doc.select("[class]").forEach { el ->
+                el.attr("class").split(Regex("\\s+")).filter { it.isNotBlank() }.forEach { classes.add(it) }
+            }
+            Log.d(TAG, "PROBE all_classes(" + classes.size + ")=" + classes.sorted().joinToString(","))
+
+            CANDIDATE_SELECTORS.forEach { sel ->
+                Log.d(TAG, "PROBE sel=[$sel] matches=" + doc.select(sel).size)
+            }
+
+            val links = doc.select("a[href]")
+            Log.d(TAG, "PROBE links_total=" + links.size)
+            Log.d(TAG, "PROBE hrefs=" + links.map { it.attr("href") }
+                .filter { h -> Regex("""/\\d{4,}/""").containsMatchIn(h) || h.contains("embed") }
+                .take(20).joinToString(" | "))
             Log.d(TAG, "MAIN-HTML-END")
         }
 
@@ -247,6 +268,13 @@ class JavdoeProvider : MainAPI() {
 
         /** Listing container. "0 items" on the live site means this no longer matched. */
         private const val POST_SELECTOR = "article, .post-item, .item, .item-wrapper, .col-sm-6"
+
+        /** Probed once on the main page; the winner becomes POST_SELECTOR. */
+        private val CANDIDATE_SELECTORS = listOf(
+            "article", ".post-item", ".item", ".item-wrapper", ".col-sm-6", ".col-md-6",
+            ".post", ".entry", ".video-item", ".thumb", ".col-6", ".item-col",
+            "main article", ".row > div", ".list-item", ".video", ".box"
+        )
 
         private var dumpedMain = false
     }
