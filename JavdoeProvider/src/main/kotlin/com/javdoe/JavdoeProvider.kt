@@ -53,6 +53,11 @@ class JavdoeProvider : MainAPI() {
     // in this repo overrides it; the log showed "Adding NONE (NONE) MainAPI".
     override var name = "Javdoe"
 
+    // MainAPI.mainUrl is also "NONE" by default, and MainAPI.fixUrl() resolves relative hrefs
+    // against it. Leaving it unset is why the registration line reads
+    // "Adding Javdoe (NONE) MainAPI" - the second field is mainUrl, not lang.
+    override var mainUrl = "https://javdoe.sh"
+
     private val base = "https://javdoe.sh"
 
     private val headers = mapOf(
@@ -100,9 +105,19 @@ class JavdoeProvider : MainAPI() {
         // The fragment carries root-relative hrefs ("/287060/slug/"). Resolving against the
         // document base turns them absolute; without it CloudStream requests
         // "NONE/NONE/287060/..." and load() never runs.
+        //
+        // MainAPI.fixUrl() is unusable here: it resolves against `mainUrl`, and this provider
+        // never overrides that field, so it is still "NONE" and every card resolves to
+        // "NONE/287060/..." - which then fails the startsWith("http") check below and silently
+        // drops all 33 items (measured on device: v11 33 items, v12 0 items, same responses).
         val href = a.attr("href").trim()
         if (href.isBlank()) return null
-        val url = fixUrl(href)
+        val url = when {
+            href.startsWith("http") -> href
+            href.startsWith("//") -> "https:$href"
+            href.startsWith("/") -> base + href
+            else -> "$base/$href"
+        }
         if (!url.startsWith("http")) return null
 
         val title = a.attr("title").trim()
