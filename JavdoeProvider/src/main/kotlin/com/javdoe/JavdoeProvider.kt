@@ -48,6 +48,11 @@ class JavdoeProvider : MainAPI() {
     // declare lang = "id" survive. This must match plugins.json's "language": "id".
     override var lang = "id"
 
+    // MainAPI.name defaults to "NONE", so without this the provider registers as
+    // "NONE" and collides with the app's own built-in NONE entry. Every other plugin
+    // in this repo overrides it; the log showed "Adding NONE (NONE) MainAPI".
+    override var name = "Javdoe"
+
     private val base = "https://javdoe.sh"
 
     private val headers = mapOf(
@@ -88,7 +93,21 @@ class JavdoeProvider : MainAPI() {
 
     private suspend fun listPosts(url: String): List<SearchResponse> {
         val doc = get(url) ?: return emptyList()
-        return doc.select("article, .post-item, .item").mapNotNull { it.toSearch() }
+
+        // Dump the structural markers once: a "0 items" result is always a selector that no
+        // longer matches, and the only way to see the real markup is to print it from inside
+        // the app - a host or adb-shell fetch is outside the split tunnel and gets the ISP
+        // blockpage instead of the site.
+        if (!dumpedMain) {
+            dumpedMain = true
+            Log.d(TAG, "MAIN-HTML-BEGIN len=" + doc.html().length)
+            Log.d(TAG, "MAIN-HTML-BODY " + doc.html().replace(Regex("\\s+"), " ").take(4000))
+            Log.d(TAG, "MAIN-HTML-END")
+        }
+
+        val results = doc.select(POST_SELECTOR).mapNotNull { it.toSearch() }
+        Log.d(TAG, "listPosts $url -> ${results.size} items")
+        return results
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -225,5 +244,10 @@ class JavdoeProvider : MainAPI() {
 
     companion object {
         private const val TAG = "Javdoe"
+
+        /** Listing container. "0 items" on the live site means this no longer matched. */
+        private const val POST_SELECTOR = "article, .post-item, .item, .item-wrapper, .col-sm-6"
+
+        private var dumpedMain = false
     }
 }
