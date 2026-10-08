@@ -34,6 +34,14 @@ import org.jsoup.nodes.Element
  */
 class JavdoeProvider : MainAPI() {
 
+    // Without these two the app filters the provider out of the homepage source list:
+    // MainAPI.hasMainPage defaults to false, and supportedTypes defaults to
+    // Movie/TvSeries/Cartoon/Anime/OVA - never NSFW. filterProviderByPreferredMedia()
+    // then drops it, so the plugin can be installed and listed under Extensions yet
+    // never appear as a source on the home screen.
+    override val hasMainPage = true
+    override val supportedTypes = setOf(TvType.NSFW)
+
     private val base = "https://javdoe.sh"
 
     private val headers = mapOf(
@@ -43,7 +51,10 @@ class JavdoeProvider : MainAPI() {
     )
 
     private suspend fun get(url: String, referer: String = "$base/"): org.jsoup.nodes.Document? = try {
-        app.get(url, headers = headers + ("Referer" to referer)).document
+        Log.d(TAG, "GET $url")
+                val doc = app.get(url, headers = headers + ("Referer" to referer)).document
+                Log.d(TAG, "GET $url -> ok (${doc.title().take(60)})")
+                doc
     } catch (e: Exception) {
         Log.e(TAG, "GET $url failed: ${e.message}")
         null
