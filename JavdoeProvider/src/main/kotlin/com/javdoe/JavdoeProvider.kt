@@ -60,6 +60,21 @@ class JavdoeProvider : MainAPI() {
 
     private val base = "https://javdoe.sh"
 
+    /** Resolve a possibly relative href against this provider's own base. */
+    private fun absolute(href: String): String = when {
+        href.startsWith("http") -> href
+        href.startsWith("//") -> "https:$href"
+        href.startsWith("/") -> base + href
+        else -> "$base/$href"
+    }
+
+    /**
+     * Every url handed to the home screen this session, so no item can appear twice no matter what
+     * the server returns. v14 shipped without this and scrolling repeated the same 48 items on
+     * every page.
+     */
+    private val seen: MutableSet<String> = java.util.Collections.synchronizedSet(LinkedHashSet())
+
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
         "Referer" to "$base/",
@@ -112,12 +127,7 @@ class JavdoeProvider : MainAPI() {
         // drops all 33 items (measured on device: v11 33 items, v12 0 items, same responses).
         val href = a.attr("href").trim()
         if (href.isBlank()) return null
-        val url = when {
-            href.startsWith("http") -> href
-            href.startsWith("//") -> "https:$href"
-            href.startsWith("/") -> base + href
-            else -> "$base/$href"
-        }
+        val url = absolute(href)
         if (!url.startsWith("http")) return null
 
         val title = a.attr("title").trim()
@@ -167,35 +177,51 @@ class JavdoeProvider : MainAPI() {
     )
 
     /**
-     * One page of one section.
+     * One section, all of it.
      *
-     * Page 1 needs no extra parameter - measured response was
-     * `{"status":1,"html":"...","pagination":"","total":48}`. The `pagination` value is empty, so
-     * nothing in the payload says how to ask for page 2; `&page=` is the probe, and its effect is
-     * logged (body head, total, first video id) rather than assumed.
+     * This endpoint is not paginated, measured on the device (v14): `&page=2` through `&page=10`
+     * each returned the same 18 items as page 1, and `total` always equalled the item count. The
+     * JSON's "pagination" field is "" in every response. So a section is a fixed set and asking
+     * it for a second page only duplicates the first - see getMainPage for where the scroll
+     * actually continues.
      */
-    private suspend fun sectionPosts(section: String, page: Int): List<SearchResponse> {
-        val url = if (page <= 1) "$base/?ajax=fp_section&s=$section"
-        else "$base/?ajax=fp_section&s=$section&page=$page"
-        val body = getText(url) ?: return emptyList()
+    private suspend fun sectionPosts(section: String): List<SearchResponse> {
+        val body = getText("$base/?ajax=fp_section&s=$section") ?: return emptyList()
 
         val total = Regex("\"total\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1) ?: "?"
         val html = jsonString(body, "html")
         if (html.isNullOrBlank()) {
-            // status 0 / empty html is what a wrong section name returns, so say which page asked.
-            Log.d(TAG, "section $section p$page -> EMPTY (total=$total) ${body.take(120)}")
+            // status 0 / empty html is what a wrong section name returns.
+            Log.d(TAG, "section $section -> EMPTY (total=$total) ${body.take(120)}")
             return emptyList()
         }
         val parsed = org.jsoup.parser.Parser.parse(html, "$base/")
-        val items = parsed.select("li[id^=video-]").mapNotNull { it.toSearch() }
-        val ids = parsed.select("li[id^=video-]").joinToString(",") {
-            it.attr("id").removePrefix("video-")
-        }
-        Log.d(TAG, "section $section p$page -> ${items.size} items, " +
-            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster, total=$total, ids=$ids")
+        val cards = parsed.select("li[id^=video-]")
+        val items = cards.mapNotNull { it.toSearch() }
+        // Sections legitimately overlap, so nothing is removed here; but anything already handed
+        // out is remembered so later pages cannot repeat it.
+        items.forEach { seen.add(it.url) }
+        Log.d(TAG, "section $section -> ${items.size} items, " +
+            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster, total=$total, " +
+            "ids=" + cards.joinToString(",") { it.attr("id").removePrefix("video-") })
         return items
     }
 
+    /**
+     * The site's own archive page, used to keep the home feed growing after the sections.
+     *
+     * `$base/page/<n>/` is a guess about how the theme paginates, so every page logs its card count
+     * and the ids it parsed: a working archive is confirmed by that line, and the first page that
+     * comes back empty ends the feed.
+     */
+    private suspend fun archivePosts(page: Int): List<SearchResponse> {
+        val doc = get("$base/page/$page/") ?: return emptyList()
+        val cards = doc.select("li[id^=video-]")
+        val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
+        Log.d(TAG, "archive page $page -> ${cards.size} cards, ${fresh.size} new, ids=" +
+            cards.joinToString(",") { it.attr("id").removePrefix("video-") })
+        return fresh
+    }
     /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
     private suspend fun searchPosts(url: String): List<SearchResponse> {
         val doc = get(url) ?: return emptyList()
@@ -214,20 +240,24 @@ class JavdoeProvider : MainAPI() {
      * a video appearing in two sections is legitimately listed under both.
      */
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val rows = sections.map { section ->
-            val items = sectionPosts(section, page)
-            HomePageList(sectionTitles[section] ?: section, items, false)
+        // Every discovered section gets its own named row on page 1 - the full set, because the
+        // endpoint has no second page. From page 2 on the feed continues with the site's archive,
+        // one archive page per scroll step.
+        val rows = if (page <= 1) {
+            sections.map { s -> HomePageList(sectionTitles[s] ?: s, sectionPosts(s), false) }
+        } else {
+            val items = archivePosts(page)
+            if (items.isEmpty()) emptyList()
+            else listOf(HomePageList("Semua Video", items, false))
         }
         val total = rows.sumOf { it.list.size }
-        Log.d(TAG, "main page $page -> ${rows.count { it.list.isNotEmpty() }}/${rows.size} rows, " +
-            "$total items (" +
+        Log.d(TAG, "main page $page -> ${rows.count { it.list.isNotEmpty() }} rows, " +
+            "$total new items, seen=${seen.size} (" +
             rows.joinToString(" ") { "${it.name}=${it.list.size}" } + ")")
 
-        // Keep scrolling only while a page actually produced something. An empty page ends the
-        // feed, which is how CloudStream learns to stop firing getMainPage.
+        // An empty page ends the feed, which is how CloudStream learns to stop calling us.
         return newHomePageResponse(rows, rows.any { it.list.isNotEmpty() })
     }
-
     override suspend fun search(query: String): List<SearchResponse> =
         searchPosts("$base/?s=${query.trim().replace(" ", "+")}")
 
@@ -261,40 +291,36 @@ class JavdoeProvider : MainAPI() {
 
         val postDoc = get(data) ?: return false
 
-        // v13 device log: "no embed iframe on <post>". The post page was fetched fine
-        // (title parsed) but carries no <iframe>, so look at what it does carry before
-        // assuming a selector.
-        Log.d(TAG, "POST-PROBE iframes=" + postDoc.select("iframe").size +
-            " videos=" + postDoc.select("video").size +
-            " sources=" + postDoc.select("source[src], source[data-src]").size +
-            " classes=" + postDoc.select("[class]").map { it.attr("class") }
-                .flatMap { it.split(" ") }.filter { it.isNotBlank() }
-                .distinct().filter { it.contains("play", true) || it.contains("video", true) ||
-                                    it.contains("embed", true) || it.contains("player", true) }
-                .take(15).joinToString(","))
-        val inline = postDoc.select("script").filter { it.attr("src").isNullOrBlank() }
-            .joinToString(" ") { it.data() }
-        Log.d(TAG, "POST-PROBE pats=" + listOf(
-            "javdoe_play[^'\"\\\\]{0,40}",
-            "/embed/\\d+/?",
-            "player[^'\"\\\\]{0,60}",
-            "<\\\\?\\\\w+[^'\"\\\\]{0,40}"
-        ).joinToString(" | ") { p ->
-            Regex(p, RegexOption.IGNORE_CASE).findAll(postDoc.html() + " " + inline)
-                .map { it.value.take(60) }.distinct().take(4).joinToString(";")
-        })
-        Log.d(TAG, "POST-PROBE ids=" + postDoc.select("[id]").map { it.attr("id") }
-            .filter { it.isNotBlank() }.distinct().take(25).joinToString(" | "))
-
-        val embedSrc = postDoc
-            .selectFirst("div.responsive-player iframe[src], .video-player iframe[src], iframe[src]")
-            ?.attr("src")
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { fixUrl(it) }
+        // Measured on the post page (v14 POST-PROBE):
+        //   iframes=1  videos=0  sources=0
+        //   classes: fa-video-camera, search-in-video, content-video, pp-play
+        //   ids: video | player-container | player | player-poster | main-player | previewBox ...
+        //   pattern: /embed/287072/
+        //
+        // So there IS an iframe - the old selector just required [src] and this one keeps its
+        // address elsewhere. #player-poster with .pp-play is the click-to-play overlay, which is
+        // why the page shows a poster instead of a player until it is tapped. Read the iframe and
+        // every data-* attribute in the document rather than assuming which one holds the address.
+        val embedSrc = postDoc.selectFirst("iframe[src], iframe[data-src]")?.let { f ->
+            f.attr("src").ifBlank { f.attr("data-src") }.trim()
+        }?.ifBlank { null }
+            ?.let { absolute(it) }
+            ?: postDoc.selectFirst("[data-embed-url], [data-embed], [data-video-url], [data-iframe]")
+                ?.let { el ->
+                    listOf("data-embed-url", "data-embed", "data-video-url", "data-iframe")
+                        .firstNotNullOfOrNull { el.attr(it).ifBlank { null } }?.trim()
+                }
+                ?.let { absolute(it) }
+            ?: Regex("""/embed/\d+/?/""").find(postDoc.html())
+                ?.value
+                ?.let { absolute(it) }
 
         if (embedSrc.isNullOrBlank()) {
-            Log.e(TAG, "no embed iframe on $data")
+            Log.e(TAG, "no embed url on $data :: " +
+                "iframes=" + postDoc.select("iframe").map { it.attributes().asList().joinToString(",") { a -> a.key } }.distinct().take(3).joinToString(" ; ") +
+                " dataAttrs=" + postDoc.select("*").flatMap { e ->
+                    e.attributes().asList().map { it.key }.filter { it.startsWith("data-") }
+                }.distinct().take(20).joinToString(","))
             return false
         }
         Log.d(TAG, "embed page: $embedSrc")
