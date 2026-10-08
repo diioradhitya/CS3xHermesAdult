@@ -156,16 +156,43 @@ class JavdoeProvider : MainAPI() {
      */
     private val sections = listOf("watched", "engsub", "bigtit", "titfuk", "mature", "javhd")
 
-    private suspend fun sectionPosts(section: String): List<SearchResponse> {
-        val body = getText("$base/?ajax=fp_section&s=$section") ?: return emptyList()
-        val html = jsonString(body, "html") ?: run {
-            Log.e(TAG, "$section: no html field")
+    /** Row title for each section id, so the home screen reads as a category header. */
+    private val sectionTitles = mapOf(
+        "watched" to "Paling Banyak Ditonton",
+        "engsub" to "English Subbed",
+        "bigtit" to "Big Tit",
+        "titfuk" to "Tit Fuk",
+        "mature" to "Mature",
+        "javhd" to "JAV HD"
+    )
+
+    /**
+     * One page of one section.
+     *
+     * Page 1 needs no extra parameter - measured response was
+     * `{"status":1,"html":"...","pagination":"","total":48}`. The `pagination` value is empty, so
+     * nothing in the payload says how to ask for page 2; `&page=` is the probe, and its effect is
+     * logged (body head, total, first video id) rather than assumed.
+     */
+    private suspend fun sectionPosts(section: String, page: Int): List<SearchResponse> {
+        val url = if (page <= 1) "$base/?ajax=fp_section&s=$section"
+        else "$base/?ajax=fp_section&s=$section&page=$page"
+        val body = getText(url) ?: return emptyList()
+
+        val total = Regex("\"total\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1) ?: "?"
+        val html = jsonString(body, "html")
+        if (html.isNullOrBlank()) {
+            // status 0 / empty html is what a wrong section name returns, so say which page asked.
+            Log.d(TAG, "section $section p$page -> EMPTY (total=$total) ${body.take(120)}")
             return emptyList()
         }
         val parsed = org.jsoup.parser.Parser.parse(html, "$base/")
         val items = parsed.select("li[id^=video-]").mapNotNull { it.toSearch() }
-        Log.d(TAG, "section $section -> ${items.size} items, " +
-            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster")
+        val ids = parsed.select("li[id^=video-]").joinToString(",") {
+            it.attr("id").removePrefix("video-")
+        }
+        Log.d(TAG, "section $section p$page -> ${items.size} items, " +
+            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster, total=$total, ids=$ids")
         return items
     }
 
@@ -177,19 +204,28 @@ class JavdoeProvider : MainAPI() {
         return items
     }
 
+    /**
+     * Every discovered section gets its own row on the home screen, and each scroll appends the
+     * next page of every section - that is how CloudStream drives infinite scroll here: it calls
+     * getMainPage(1), appends getMainPage(2), getMainPage(3)... and stops when hasNext is false.
+     *
+     * Rows are built per section rather than flattened, because a flat listOf(dedupeBy(url))
+     * collapses the six categories into one anonymous strip. Nothing is deduped across rows now:
+     * a video appearing in two sections is legitimately listed under both.
+     */
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        // The shell has no items of its own; each section has to be fetched, and page 1 is the
-        // only page worth building - the endpoint returns a fixed set with its own pagination
-        // markup that CloudStream's page model does not consume.
-        val items = if (page <= 1) {
-            sections.flatMap { sectionPosts(it) }
-                .distinctBy { it.url }
-                .also { list ->
-                    Log.d(TAG, "main page 1 -> ${list.size} items, " +
-                        "${list.count { !it.posterUrl.isNullOrBlank() }} with poster")
-                }
-        } else emptyList()
-        return newHomePageResponse(request.name, items)
+        val rows = sections.map { section ->
+            val items = sectionPosts(section, page)
+            HomePageList(sectionTitles[section] ?: section, items, false)
+        }
+        val total = rows.sumOf { it.list.size }
+        Log.d(TAG, "main page $page -> ${rows.count { it.list.isNotEmpty() }}/${rows.size} rows, " +
+            "$total items (" +
+            rows.joinToString(" ") { "${it.name}=${it.list.size}" } + ")")
+
+        // Keep scrolling only while a page actually produced something. An empty page ends the
+        // feed, which is how CloudStream learns to stop firing getMainPage.
+        return newHomePageResponse(rows, rows.any { it.list.isNotEmpty() })
     }
 
     override suspend fun search(query: String): List<SearchResponse> =
@@ -224,6 +260,31 @@ class JavdoeProvider : MainAPI() {
         if (data.isBlank()) return false
 
         val postDoc = get(data) ?: return false
+
+        // v13 device log: "no embed iframe on <post>". The post page was fetched fine
+        // (title parsed) but carries no <iframe>, so look at what it does carry before
+        // assuming a selector.
+        Log.d(TAG, "POST-PROBE iframes=" + postDoc.select("iframe").size +
+            " videos=" + postDoc.select("video").size +
+            " sources=" + postDoc.select("source[src], source[data-src]").size +
+            " classes=" + postDoc.select("[class]").map { it.attr("class") }
+                .flatMap { it.split(" ") }.filter { it.isNotBlank() }
+                .distinct().filter { it.contains("play", true) || it.contains("video", true) ||
+                                    it.contains("embed", true) || it.contains("player", true) }
+                .take(15).joinToString(","))
+        val inline = postDoc.select("script").filter { it.attr("src").isNullOrBlank() }
+            .joinToString(" ") { it.data() }
+        Log.d(TAG, "POST-PROBE pats=" + listOf(
+            "javdoe_play[^'\"\\\\]{0,40}",
+            "/embed/\\d+/?",
+            "player[^'\"\\\\]{0,60}",
+            "<\\\\?\\\\w+[^'\"\\\\]{0,40}"
+        ).joinToString(" | ") { p ->
+            Regex(p, RegexOption.IGNORE_CASE).findAll(postDoc.html() + " " + inline)
+                .map { it.value.take(60) }.distinct().take(4).joinToString(";")
+        })
+        Log.d(TAG, "POST-PROBE ids=" + postDoc.select("[id]").map { it.attr("id") }
+            .filter { it.isNotBlank() }.distinct().take(25).joinToString(" | "))
 
         val embedSrc = postDoc
             .selectFirst("div.responsive-player iframe[src], .video-player iframe[src], iframe[src]")
