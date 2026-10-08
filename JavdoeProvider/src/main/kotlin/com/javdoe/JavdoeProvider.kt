@@ -71,20 +71,33 @@ class JavdoeProvider : MainAPI() {
         null
     }
 
+    /**
+     * One listing card. Measured on the live homepage 2026-10-08: the site has no `article`
+     * element at all. 24 cards are `.col-sm-6` wrappers, each holding a `.video` block with
+     * `.video-thumb > a > img.thumbnail` for the cover and `.panel-padding > a` for the title.
+     * Probe output for reference: sel=[.col-sm-6] matches=24, sel=[article] matches=0.
+     */
     private fun Element.toSearch(): SearchResponse? {
-        val a = selectFirst("h2 a, h3 a, .post-title a, a") ?: return null
-        val href = a.attr("href").ifBlank { return null }
-        val title = (a.attr("title").ifBlank { a.text() }).trim()
+        val a = selectFirst("a[href]") ?: return null
+        val href = a.attr("href").trim()
+        if (href.isBlank()) return null
+
+        val title = a.attr("title").trim()
+            .ifBlank { selectFirst(".panel-padding a[href], .panel-padding")?.text()?.trim().orEmpty() }
+            .ifBlank { a.text().trim() }
         if (title.isBlank()) return null
 
-        // Lazy-loaded covers put the real URL in a data attribute and a placeholder in src.
-        val poster = selectFirst("img")?.let { img ->
-            img.attr("data-src").ifBlank {
+        val img = selectFirst("img")
+        val poster = when {
+            img == null -> ""
+            else -> img.attr("data-src").ifBlank {
                 img.attr("data-lazy-src").ifBlank {
-                    img.attr("data-original").ifBlank { img.attr("src") }
+                    img.attr("data-original").ifBlank {
+                        img.attr("data-srcset").ifBlank { img.attr("src") }
+                    }
                 }
             }
-        }?.trim().orEmpty()
+        }.trim()
 
         return newMovieSearchResponse(title, href, TvType.NSFW) {
             if (poster.startsWith("http")) posterUrl = poster
@@ -103,26 +116,14 @@ class JavdoeProvider : MainAPI() {
             val html = doc.html()
             Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
 
-            // logcat truncates one entry at ~4 KB, which only ever covers <head>, so the
-            // document cannot be read out wholesale. Probe instead: count matches for each
-            // candidate container, and print the class names actually present. The host and
-            // `adb shell` are both outside the split tunnel and get the ISP blockpage, so this
-            // is the only place the real markup can be observed.
-            val classes = HashSet<String>()
-            doc.select("[class]").forEach { el ->
-                el.attr("class").split(Regex("\\s+")).filter { it.isNotBlank() }.forEach { classes.add(it) }
+            // logcat truncates one entry at ~4 KB, so print the first cards rather than the
+            // whole document - and only while something is still wrong.
+            val cards = doc.select(POST_SELECTOR)
+            Log.d(TAG, "PROBE cards=" + cards.size)
+            for (i in 0 until minOf(2, cards.size)) {
+                Log.d(TAG, "CARD[$i] " + cards[i].outerHtml().replace(Regex("\\s+"), " "))
             }
-            Log.d(TAG, "PROBE all_classes(" + classes.size + ")=" + classes.sorted().joinToString(","))
-
-            CANDIDATE_SELECTORS.forEach { sel ->
-                Log.d(TAG, "PROBE sel=[$sel] matches=" + doc.select(sel).size)
-            }
-
-            val links = doc.select("a[href]")
-            Log.d(TAG, "PROBE links_total=" + links.size)
-            Log.d(TAG, "PROBE hrefs=" + links.map { it.attr("href") }
-                .filter { h -> Regex("""/\\d{4,}/""").containsMatchIn(h) || h.contains("embed") }
-                .take(20).joinToString(" | "))
+            Log.d(TAG, "PROBE hrefs=" + doc.select("a[href]").map { it.attr("href") }.take(30).joinToString(" | "))
             Log.d(TAG, "MAIN-HTML-END")
         }
 
@@ -266,15 +267,11 @@ class JavdoeProvider : MainAPI() {
     companion object {
         private const val TAG = "Javdoe"
 
-        /** Listing container. "0 items" on the live site means this no longer matched. */
-        private const val POST_SELECTOR = "article, .post-item, .item, .item-wrapper, .col-sm-6"
+        /** 24 cards on the live homepage. There is no `article` element on this site. */
+        private const val POST_SELECTOR = ".col-sm-6"
 
-        /** Probed once on the main page; the winner becomes POST_SELECTOR. */
-        private val CANDIDATE_SELECTORS = listOf(
-            "article", ".post-item", ".item", ".item-wrapper", ".col-sm-6", ".col-md-6",
-            ".post", ".entry", ".video-item", ".thumb", ".col-6", ".item-col",
-            "main article", ".row > div", ".list-item", ".video", ".box"
-        )
+        /** Kept for the one-shot dump below; the site is a Bootstrap 3 grid, not WordPress. */
+        private val CANDIDATE_SELECTORS = listOf(".col-sm-6", ".video", ".video-thumb")
 
         private var dumpedMain = false
     }
