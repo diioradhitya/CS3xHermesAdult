@@ -67,11 +67,21 @@ class JavdoeProvider : MainAPI() {
                 Log.d(TAG, "GET $url -> ok (${doc.title().take(60)})")
                 doc
     } catch (e: Exception) {
-        Log.e(TAG, "GET $url failed: ${e.message}")
-        null
-    }
+            Log.e(TAG, "GET $url failed: ${e.message}")
+            null
+        }
 
-    /**
+        /** Raw body text, for endpoints that return JSON or an HTML fragment. */
+        private suspend fun getText(url: String, referer: String = "$base/"): String? = try {
+            val text = app.get(url, headers = headers + ("Referer" to referer)).text
+            Log.d(TAG, "GETTEXT $url -> ${text.length} chars")
+            text
+        } catch (e: Exception) {
+            Log.e(TAG, "GETTEXT $url -> FAILED ${e.message}")
+            null
+        }
+
+        /**
      * One listing card. Measured on the live homepage 2026-10-08: the site has no `article`
      * element at all. 24 cards are `.col-sm-6` wrappers, each holding a `.video` block with
      * `.video-thumb > a > img.thumbnail` for the cover and `.panel-padding > a` for the title.
@@ -116,29 +126,26 @@ class JavdoeProvider : MainAPI() {
             val html = doc.html()
             Log.d(TAG, "MAIN-HTML-BEGIN len=" + html.length)
 
-            // The grid is rendered client-side. Measured from the device (v8):
-            //   PROBE sel=[.video] n=54
-            //   EL0[.video] <div class="video"><div class="thumbnail fp-sk-card">
-            //               <div class="video-thumb fp-sk-img sk-pulse"></div>
-            //               <span class="fp-sk-line sk-pulse" ...></span> ...
-            // Every card is a skeleton placeholder (sk-pulse / fp-sk-*), so no selector
-            // can ever match real data in the raw HTML. Find the data source instead.
-            val scripts = doc.select("script[src]").map { it.attr("src") }
-            Log.d(TAG, "PROBE js=" + scripts.take(20).joinToString(" | "))
-            val inline = doc.select("script").filter { !it.attr("src").isNullOrBlank() }
-                .joinToString(" ") { it.data() }
-            for (pat in listOf("/api/[a-z0-9_/-]+", "/wp-json/[a-z0-9_/-]+", "ajaxurl",
-                               "action=[a-z_]+", "admin-ajax", "fetch\\([^)]{0,60}")) {
-                val hits = Regex(pat).findAll(inline + " " + doc.html()).map { it.value }.distinct().take(8)
-                Log.d(TAG, "PROBE pat[$pat]=" + hits.joinToString(" | "))
-            }
-            for (el in listOf("[data-id]", "[data-slug]", "[data-video]", "[data-url]", "[data-href]")) {
-                val els = doc.select(el)
-                Log.d(TAG, "PROBE attr $el n=" + els.size +
-                    (if (els.isNotEmpty()) " e0=" + els[0].attributes().asList().joinToString(",") { it.key + "=" + it.value.take(40) } else ""))
-            }
-            Log.d(TAG, "PROBE ids=" + doc.select("[id]").map { it.attr("id") }
-                .filter { it.isNotBlank() }.distinct().take(30).joinToString(" | "))
+            // The grid is rendered client-side, so this document carries only shell markup.
+                        // Measured from the device (v8):
+                        //   EL0[.video] <div class="video"><div class="thumbnail fp-sk-card">
+                        //               <div class="video-thumb fp-sk-img sk-pulse"></div>
+                        //               <span class="fp-sk-line sk-pulse" ...></span> ...
+                        // v9 located the loader that fills it:
+                        //   PROBE pat[fetch(...)] = fetch('?ajax=fp_section&s=' + section, ...)
+                        //   PROBE ids = sk-watched | fc-watched | sk-engsub | fc-engsub | sk-bigtit ...
+                        // sk-* is the shimmer, fc-* is where the fetched markup is injected.
+                        // So ask the endpoint what each section returns before writing a parser.
+                        for (section in listOf("javdoe", "watched", "engsub", "bigtit", "titfuk", "mature", "javhd")) {
+                            val body = getText("$base/?ajax=fp_section&s=$section")
+                            if (body == null) { Log.d(TAG, "AJAX $section -> null"); continue }
+                            Log.d(TAG, "AJAX $section len=" + body.length + " head=" +
+                                body.replace(Regex("\\s+"), " ").take(300))
+                            val parsed = org.jsoup.parser.Parser.parse(body, "$base/")
+                            Log.d(TAG, "AJAX $section links=" + parsed.select("a[href]").size + " classes=" +
+                                parsed.select("[class]").map { it.attr("class") }
+                                    .flatMap { it.split(" ") }.filter { it.isNotBlank() }.distinct().take(12).joinToString(","))
+                        }
         }
 
         val results = doc.select(POST_SELECTOR).mapNotNull { it.toSearch() }
