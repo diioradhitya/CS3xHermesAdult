@@ -364,6 +364,22 @@ class JavdoeProvider : MainAPI() {
         // address elsewhere. #player-poster with .pp-play is the click-to-play overlay, which is
         // why the page shows a poster instead of a player until it is tapped. Read the iframe and
         // every data-* attribute in the document rather than assuming which one holds the address.
+        // PROBE: the post page exposes several players (POST-PROBE showed player1..player4), and
+        // every one of them may point at a different host. Dump each player container in full so the
+        // multi-source shape is read from the markup instead of guessed.
+        val players = postDoc.select("#player, #player1, #player2, #player3, #player4," +
+            "[id^=player-], .player, .video-player, .responsive-player, [id*=source], [class*=source]")
+        Log.d(TAG, "PLAYERS n=${players.size}")
+        players.take(8).forEachIndexed { i, p ->
+            val attrs = p.attributes().asList().joinToString(",") { "${it.key}=${it.value.take(60)}" }
+            Log.d(TAG, "PLAYER[$i] id=${p.attr("id")} cls=${p.attr("class")} attrs=$attrs")
+            Log.d(TAG, "PLAYER[$i] html=" + p.outerHtml().replace("\n", " ").take(700))
+        }
+        postDoc.select("iframe").forEachIndexed { i, f ->
+            val a = f.attributes().asList().joinToString(",") { "${it.key}=${it.value.take(80)}" }
+            Log.d(TAG, "IFRAME[$i] $a")
+        }
+
         val embedSrc = postDoc.selectFirst("iframe[src], iframe[data-src]")?.let { f ->
             f.attr("src").ifBlank { f.attr("data-src") }.trim()
         }?.ifBlank { null }
