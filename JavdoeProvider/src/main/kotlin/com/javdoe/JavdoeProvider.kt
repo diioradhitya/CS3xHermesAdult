@@ -61,6 +61,13 @@ class JavdoeProvider : MainAPI() {
     private val base = "https://javdoe.sh"
 
     /**
+     * Extensions that are page furniture, not a stream: the post gallery on javdoe is served from
+     * pics.dmm.co.jp and its images are absolute urls, so a naive "any external host" sweep picks
+     * them up alongside the real server buttons.
+     */
+    private val IMAGE_EXT = setOf("jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "ico", "css", "js")
+
+    /**
      * Some hosts wrap the embed address in base64 rather than storing the plain url, so a src that
      * decodes to something starting with http is unwrapped; anything else is returned untouched.
      */
@@ -503,6 +510,10 @@ class JavdoeProvider : MainAPI() {
             .forEach { servers.add(it) }
 
         val list = servers.filter { !it.contains("javdoe.sh") && !it.contains("/templates/") }
+            // The page's own gallery images are absolute external urls too, so they land in the
+            // same set as the server addresses (the v22 log tried ten pics.dmm.co.jp jpgs one after
+            // another). They are not players and only cost a round trip each.
+            .filterNot { IMAGE_EXT.contains(it.substringBefore('?').substringAfterLast('.')) }
         if (list.isEmpty()) {
             Log.e(TAG, "no server address on the post page at all")
             return false
@@ -571,9 +582,9 @@ class JavdoeProvider : MainAPI() {
      */
     private val emittedThisServer = java.util.concurrent.CopyOnWriteArrayList<String>()
 
-    /** True when at least one link was emitted this server and every one of them is usable. */
+    /** True when at least one link was emitted this server and that link is usable. */
     private fun allEmittedUsable(): Boolean =
-        emittedThisServer.isNotEmpty() && emittedThisServer.all { usableStreamUrl(it) }
+        emittedThisServer.isNotEmpty() && emittedThisServer.any { usableStreamUrl(it) }
 
     /**
      * A stream url ExoPlayer can actually fetch: absolute http(s), no fragment or query left in
