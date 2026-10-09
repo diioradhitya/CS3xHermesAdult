@@ -159,7 +159,16 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
-    private val siteOrigin = "https://ystream.id"
+    /**
+     * The Byse deployment this extraction belongs to.
+     *
+     * Byse is one codebase deployed under many hosts (ystream.id, mycloudz.cc, cloudwish.xyz, ...)
+          * and each deployment serves its own api/videos/<code> tree. Hardcoding ystream.id meant a
+          * mycloudz.cc/v/<code> embed asked ystream.id for that code and got nothing back, so every
+          * video ended in "no link found" (device log: "no link from https://mycloudz.cc/v/5vqnmuhzdsyx").
+          * It is therefore taken from the embed url itself, not baked in at build time.
+     */
+    @Volatile private var siteOrigin = "https://ystream.id"
 
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
@@ -368,7 +377,13 @@ class YstreamExtractor : ExtractorApi() {
     ) {
         val refererUrl = getBaseUrl(url)
         val code = getCodeFromUrl(url)
-        if (code.isEmpty()) return
+        if (code.isEmpty()) {
+            Log.e(TAG, "no Byse code in $url")
+            return
+        }
+        // The deployment is the embed's own host - never the one baked in at build time.
+        siteOrigin = refererUrl
+        Log.d(TAG, "START code=$code origin=$siteOrigin host=${URI(url).host}")
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
         // Step 0: structural fingerprint.
@@ -478,7 +493,7 @@ class YstreamExtractor : ExtractorApi() {
             name,
             streamUrl,
             refererUrl,
-            headers = mapOf("Referer" to "https://ystream.id/e/$code/", "User-Agent" to ua)
+            headers = mapOf("Referer" to "$siteOrigin/e/$code/", "User-Agent" to ua)
         ).forEach(callback)
     }
 }

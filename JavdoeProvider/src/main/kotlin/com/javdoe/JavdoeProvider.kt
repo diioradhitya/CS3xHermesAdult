@@ -236,27 +236,44 @@ class JavdoeProvider : MainAPI() {
      * argument out of that inline script and use whatever name it actually uses.
      */
     private suspend fun archivePosts(page: Int): List<SearchResponse> {
-        val shell = org.jsoup.parser.Parser.parse(
-            getText("$base/?ajax=fp_section&s=watched") ?: return emptyList(), "$base/")
-        val inline = shell.select("script").filter { it.attr("src").isNullOrBlank() }
-            .joinToString(" ") { it.data() }
-
-        val params = Regex("""(page|paged|pagination|offset|start|load_more|more)\s*[:=]""",
-            RegexOption.IGNORE_CASE).findAll(inline).map { it.groupValues[1].lowercase() }
-            .distinct().toList()
-        Log.d(TAG, "archive p$page: loader pagination names = $params")
+        // v17 measured `loader pagination names = []` - the shell's inline script carries no
+        // pagination argument at all, so there is nothing to read out of it. Three names were
+        // already measured dead on the device (&page=, /page/<n>/, &paged=, all returning page 1).
+        //
+        // A category page IS server-rendered though (/category/mature/ returned 66937 chars), so its
+        // markup - not the shell's script - is where a next-page link has to be looked for. Whatever
+        // href the pager uses is the address that actually moves the feed.
+        val catDoc = get("$base/category/mature/") ?: return emptyList()
+        val pageHrefs = catDoc.select("a[href]")
+            .map { it.attr("href").trim() }
+            .filter { it.isNotBlank() && !it.contains("#") }
+            .filter { href ->
+                val low = href.lowercase()
+                low.contains("/page/") || low.contains("?page") || low.contains("paged=") ||
+                    low.contains("offset=") || low.contains("start=")
+            }
+            .distinct()
+            .take(12)
+        Log.d(TAG, "archive p$page: pager hrefs = $pageHrefs")
 
         val candidates = buildList {
-            params.forEach { add("$base/?ajax=fp_section&s=watched&$it=$page") }
-            add("$base/category/mature/")
-            add("$base/tag/javhd/")
+            // Page-shaped hrefs discovered on the server-rendered category page.
+            pageHrefs.forEach { add(if (it.startsWith("http")) it else absolute(it)) }
+            // The ajax section with each plausible page name, so a name the pager uses as a
+            // query string is still covered.
+            listOf("paged", "page", "pg", "offset", "start").forEach { pname ->
+                add("$base/?ajax=fp_section&s=mature&$pname=$page")
+            }
         }
 
-        for (url in candidates) {
+        for (url in candidates.distinct()) {
             val body = getText(url) ?: continue
             val frag = jsonString(body, "html")?.ifBlank { null } ?: body
             val cards = org.jsoup.parser.Parser.parse(frag, "$base/").select("li[id^=video-]")
-            if (cards.isEmpty()) continue
+            if (cards.isEmpty()) {
+                Log.d(TAG, "archive p$page: $url -> 0 cards")
+                continue
+            }
             val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
             Log.d(TAG, "archive p$page: $url -> ${cards.size} cards, ${fresh.size} new, ids=" +
                 cards.joinToString(",") { it.attr("id").removePrefix("video-") })
@@ -266,13 +283,6 @@ class JavdoeProvider : MainAPI() {
         // empty and leaving a feed that will never grow.
         Log.d(TAG, "archive p$page: no candidate returned new items; sections are the whole feed")
         return emptyList()
-    }
-    /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
-    private suspend fun searchPosts(url: String): List<SearchResponse> {
-        val doc = get(url) ?: return emptyList()
-        val items = doc.select("li[id^=video-]").mapNotNull { it.toSearch() }
-        Log.d(TAG, "search $url -> ${items.size} items")
-        return items
     }
 
     /**
@@ -303,6 +313,14 @@ class JavdoeProvider : MainAPI() {
         // An empty page ends the feed, which is how CloudStream learns to stop calling us.
         return newHomePageResponse(rows, rows.any { it.list.isNotEmpty() })
     }
+    /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
+    private suspend fun searchPosts(url: String): List<SearchResponse> {
+        val doc = get(url) ?: return emptyList()
+        val items = doc.select("li[id^=video-]").mapNotNull { it.toSearch() }
+        Log.d(TAG, "search $url -> ${items.size} items")
+        return items
+    }
+
     override suspend fun search(query: String): List<SearchResponse> =
         searchPosts("$base/?s=${query.trim().replace(" ", "+")}")
 
