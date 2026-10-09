@@ -457,60 +457,69 @@ class JavdoeProvider : MainAPI() {
                 }.distinct().take(20).joinToString(","))
             return false
         }
-        Log.d(TAG, "embed page: $embedSrc")
+// v20 device log found the multi-source structure, and it is not an iframe at all:
 
-        // v16 device log settled the hop structure - it is not what the header comment claimed:
+        //   ATTR[0] <div>    id=player-container
+        //   ATTR[1] <iframe> id=main-player  ...no src, hydrated by script
+        //   ATTR[2] <button> class=button_choice_server,data-embeds=WyJodHRwczovL3N0cmVhbTIu...,data-name=Xcloud,data-player=1
+        //   ATTR[3] <button> ...data-name=Wserver,data-player=1
+        //   ATTR[4] <button> ...data-name=Zserver,data-player=1
+        //   ATTR[5] <button> ...data-name=Yserver,data-player=1
+        //   ATTR[6] <button> data-embed=aHR0cHM6Ly9teWNsb3Vkei5jYy92L3E4eHhlNmVpNHhtcQ==,data-name=Earnvid
+        //   ATTR[7] <button> data-embed=aHR0cHM6Ly9jbG91ZHdpc2gueHl6L2UvNzJnMTR1N3NqdGl5,data-name=Streamhg
+        //   ATTR[8] <button> data-embed=aHR0cHM6Ly9zdHJlYW1iZWFzdC51cG4ub25lLyM2OW95b2E=,data-name=StreamBeast
+        //   ATTR[9] <button> data-embed=aHR0cHM6Ly9zdHJlYW10YXBlLm5ldC9lLzc5bEJQdlpQd01JQUx2bQ==,data-name=StreamTape
+        //   ATTR[10] <button> data-embed=aHR0cHM6Ly9wbGF5bW9nby5jb20vZS9xYW1zYXlneWQyNXA=,data-name=Playmogo
         //
-        //   embed page: https://mycloudz.cc/v/c2babhapnrvx
-        //   GET ... -> ok (Embed)
-        //   E/Javdoe: no javdoe_play page on https://mycloudz.cc/v/c2babhapnrvx
+        // Nine servers per post, each a DIFFERENT host, each base64-encoded - and mycloudz.cc
+        // (Earnvid) is only the first of them. Every earlier build resolved that single host, hit a
+        // popunder network behind it, and reported "no link found"; the other eight were never
+        // looked at. Two of the nine are already in CloudStream's own catalogue
+        // (StreamTapeNet for streamtape.net, Playmogo - a DoodLa clone - for playmogo.com), so
+        // loadExtractor is enough for those and no custom extractor is needed at all.
         //
-        // The decoded src is already a ystream/Byse page on its own host; there is no
-        // server.javdoe.sh/javdoe_play hop behind it. The post -> embed -> javdoe_play chain the
-        // header describes does not exist for these embeds, and requiring one made every video end
-        // in "no link found".
-        //
-        // So the embed url is treated as the thing to resolve, and the old hop is used only for the
-        // embeds that really do carry a playEmbed(...) call.
-        val embedDoc = get(embedSrc, referer = data) ?: return false
-
-        val playerPage = embedDoc.select("script")
-            .firstNotNullOfOrNull { extractPlayerUrl(it.data()) }
-            ?: embedDoc.select("a[href], [data-url]")
-                .firstOrNull { (it.attr("href") + it.attr("data-url")).contains("javdoe_play") }
-                ?.let { it.attr("href").ifBlank { it.attr("data-url") }.trim() }
-                ?.let { absolute(it) }
-
-        // playEmbed('...') appears once per server button, on the player page when there is one.
-        val servers = if (playerPage.isNullOrBlank()) {
-            Log.d(TAG, "no javdoe_play hop; resolving embed page directly: $embedSrc")
-            listOf(embedSrc)
-        } else {
-            Log.d(TAG, "player page: $playerPage")
-            val playerDoc = get(playerPage, referer = embedSrc) ?: return false
-            Regex("""playEmbed\(\s*['"]([^'"]+)['"]\s*\)""")
-                .findAll(playerDoc.html())
-                .map { it.groupValues[1].trim() }
+        // Two encodings are in play:
+        //   data-embed    base64 of a single url
+        //   data-embeds   base64 of a JSON ARRAY of urls - the four "*-server" buttons carry a
+        //                 whole mirror list each, e.g. ["https://stream2.javhdz.today/embed.php?p=3Jv2Dl-bd6UkphFPBQbrqWrR",
+        //                 "https://stream10.javhdz.today/embed.php?p=3Jv2Dl-bd6UkphFPBQbrqWrR", ...]
+        // Both are unwrapped to every url they contain, so one dead mirror cannot end the try.
+        val serverButtons = postDoc.select("button[data-embed], button[data-embeds], .button_choice_server")
+        val servers = linkedSetOf<String>()
+        serverButtons.forEach { btn ->
+            val label = btn.attr("data-name").ifBlank { btn.attr("id") }.trim()
+            val raw = listOf(btn.attr("data-embed"), btn.attr("data-embeds"))
                 .filter { it.isNotBlank() }
-                .map { absolute(it) }
-                .filter { it.startsWith("http") }
-                .distinct()
-                .toList()
-                .ifEmpty { listOf(embedSrc) }
+            val decoded = raw.flatMap { decodeServerUrls(it) }
+            decoded.forEach { servers.add(it) }
+            Log.d(TAG, "SERVER $label -> ${decoded.size} url(s)${if (decoded.isEmpty()) " (raw ${raw.firstOrNull()?.take(60)})" else ""}")
         }
 
-        Log.d(TAG, "${servers.size} server(s): $servers")
+        // Any address the page itself parks on an iframe, still worth trying last.
+        postDoc.select("iframe[src], [data-embed-url], [data-src]")
+            .mapNotNull { it.attr("src").ifBlank { it.attr("data-embed-url") }.ifBlank { it.attr("data-src") }.trim() }
+            .map { absolute(unwrap(it)) }
+            .filter { it.startsWith("http") }
+            .forEach { servers.add(it) }
 
-        for (url in servers) {
+        val list = servers.filter { !it.contains("javdoe.sh") && !it.contains("/templates/") }
+        if (list.isEmpty()) {
+            Log.e(TAG, "no server address on the post page at all")
+            return false
+        }
+        Log.d(TAG, "${list.size} server url(s) from ${serverButtons.size} buttons")
+        list.forEachIndexed { i, u -> Log.d(TAG, "SRV[$i] $u") }
+
+        for (url in list) {
             // Every server gets a turn: one dead host must not end the attempt. The callback is
             // wrapped so an extractor that emits nothing does not consume the only try.
             val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
             val wrap: (ExtractorLink) -> Unit = { emitted.set(true); callback(it) }
 
             try {
-                // Built-ins match on host name and win for anything they know. This must run
-                // before the Byse shape test below, which would otherwise hijack playmogo (a
-                // DoodStream clone serving the same /e/<code> path).
+                // Built-ins match on host name and win for anything they know - StreamTapeNet and
+                // Playmogo among them. This must run before the Byse shape test below, which would
+                // otherwise hijack playmogo (a DoodStream clone serving the same /e/<code> path).
                 if (loadExtractor(url, data, subtitleCallback, wrap) && emitted.get()) return true
 
                 if (isByseShaped(url)) {
@@ -524,6 +533,46 @@ class JavdoeProvider : MainAPI() {
             }
         }
         return false
+    }
+
+    /**
+     * One server button's payload, which arrives in either of two shapes:
+     *
+     *   data-embed    base64 of a single url, e.g. aHR0cHM6Ly9teWNsb3Vkei5jYy92L3E4eHhlNmVpNHhtcQ==
+     *                 -> https://mycloudz.cc/v/q8xxe6ei4xmq
+     *   data-embeds   base64 of a JSON array of urls, which is what the four mirror buttons carry:
+     *                 WyJodHRwczovL3N0cmVhbTIuamF2aGR6LnRvZGF5L2VtYmVkLnBocD9wPTNKdjJEbC1iZDZVa3BoRlBCQWJxeVdyST", ...]
+     *
+     * An array whose member strings are themselves base64 blobs (which is what the button really
+     * holds: [b64url, b64url, ...]) is unwrapped twice, so a plain double-decode does not lose the
+     * mirrors. Anything that does not decode to something http-shaped is dropped rather than
+     * handed to loadExtractor as a path.
+     */
+    private fun decodeServerUrls(raw: String): List<String> {
+        fun b64(text: String): String? = runCatching {
+            String(android.util.Base64.decode(text.trim(), android.util.Base64.DEFAULT))
+        }.getOrNull()
+
+        val first = b64(raw) ?: return emptyList()
+        val out = linkedSetOf<String>()
+
+        // JSON array form.
+        val trimmed = first.trim()
+        if (trimmed.startsWith("[")) {
+            Regex("\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(trimmed).forEach { m ->
+                val member = m.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
+                // Members are base64 themselves in the real payload; take them as-is when they
+                // already look like a url, else unwrap once.
+                val url = if (member.startsWith("http")) member else (b64(member) ?: member)
+                if (url.startsWith("http")) out.add(url)
+            }
+        } else if (trimmed.startsWith("http")) {
+            out.add(trimmed)
+        } else {
+            val inner = b64(trimmed)
+            if (inner?.startsWith("http") == true) out.add(inner)
+        }
+        return out.toList()
     }
 
     /**
