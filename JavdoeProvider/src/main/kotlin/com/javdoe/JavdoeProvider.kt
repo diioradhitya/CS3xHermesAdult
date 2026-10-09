@@ -221,79 +221,93 @@ class JavdoeProvider : MainAPI() {
         return items
     }
 
-    /**
+/**
      * The home feed after the sections.
      *
-     * Three pagination guesses were measured dead on the device, and all three failed identically -
-     * the server answered, with the same 18 cards as page 1:
+     * Six page-name guesses are now measured dead on the device. Every one of them answers with
+     * byte-identical length and the same six post ids, so none of them shifts the feed:
      *
-     *   &page=<n>   section watched p2 .. p10 -> 18 items, ids 287099..287082 (= p1)
-     *   /page/<n>/  archive -> 0 cards
-     *   &paged=<n>  archive p2 -> 18 cards, 0 new, ids 287099..287082 (= p1)
+     *   ?ajax=fp_section&s=mature&paged=2  -> 7334 chars, 6 cards, ids 287112,287102,...
+     *   ?ajax=fp_section&s=mature&page=2   -> 7334 chars, 6 cards, ids 287112,287102,...
+     *   ?ajax=fp_section&s=mature&pg=2     -> 7334 chars, 6 cards, ids 287112,287102,...
+     *   ?ajax=fp_section&s=mature&offset=2 -> 7334 chars, 6 cards, ids 287112,287102,...
+     *   ?ajax=fp_section&s=mature&start=2  -> 7334 chars, 6 cards, ids 287112,287102,...
      *
-     * So `?ajax=fp_section` returns one fixed window per section and no parameter shifts it. A fourth
-     * guessed name will not find it; the shell already carries the loader, so read the pagination
-     * argument out of that inline script and use whatever name it actually uses.
+     * The category pager scan is dead too. It reads server-rendered /category/mature/, which really
+     * is rendered (66937 chars, title "Video categories at Javdoe.sh"), and still reports no
+     * pager-shaped href: pager hrefs = []. A page that renders fully and offers no next link means
+     * there is no link to follow - not that a selector missed it.
+     *
+     * But one number does not fit a "no pagination" story: watched returns 18 cards while every
+     * other section returns exactly 6. That asymmetry is a LIMIT rather than a page - the other
+     * five sections are clipped at six with more behind them. So stop hunting for a pager and ask
+     * for more per request: raise the page size under every name the theme might use, then try
+     * offsets past the first six, and log what each actually returns so the real cap is measured
+     * instead of assumed.
      */
     private suspend fun archivePosts(page: Int): List<SearchResponse> {
-        // v17 measured `loader pagination names = []` - the shell's inline script carries no
-        // pagination argument at all, so there is nothing to read out of it. Three names were
-        // already measured dead on the device (&page=, /page/<n>/, &paged=, all returning page 1).
-        //
-        // A category page IS server-rendered though (/category/mature/ returned 66937 chars), so its
-        // markup - not the shell's script - is where a next-page link has to be looked for. Whatever
-        // href the pager uses is the address that actually moves the feed.
-        val catDoc = get("$base/category/mature/") ?: return emptyList()
-        val pageHrefs = catDoc.select("a[href]")
-            .map { it.attr("href").trim() }
-            .filter { it.isNotBlank() && !it.contains("#") }
-            .filter { href ->
-                val low = href.lowercase()
-                low.contains("/page/") || low.contains("?page") || low.contains("paged=") ||
-                    low.contains("offset=") || low.contains("start=")
+        val section = "mature"
+        val probes = buildList {
+            listOf("limit", "per_page", "posts_per_page", "count", "pp", "num", "size", "n")
+                .forEach { pname ->
+                    listOf(100, 48, 24, 18, 12).forEach { n ->
+                        add("$base/?ajax=fp_section&s=$section&$pname=$n")
+                    }
+                }
+            // Offset-style paging under the other names the theme might use, past the first six.
+            listOf("offset", "start", "skip").forEach { pname ->
+                add("$base/?ajax=fp_section&s=$section&$pname=6")
+                add("$base/?ajax=fp_section&s=$section&$pname=12")
             }
-            .distinct()
-            .take(12)
-        Log.d(TAG, "archive p$page: pager hrefs = $pageHrefs")
-
-        val candidates = buildList {
-            // Page-shaped hrefs discovered on the server-rendered category page.
-            pageHrefs.forEach { add(if (it.startsWith("http")) it else absolute(it)) }
-            // The ajax section with each plausible page name, so a name the pager uses as a
-            // query string is still covered.
-            listOf("paged", "page", "pg", "offset", "start").forEach { pname ->
-                add("$base/?ajax=fp_section&s=mature&$pname=$page")
-            }
+            // WordPress routes, which the category itself answers.
+            add("$base/category/$section/page/$page/")
+            add("$base/category/$section/?paged=$page")
         }
 
-        for (url in candidates.distinct()) {
-            val body = getText(url) ?: continue
-            val frag = jsonString(body, "html")?.ifBlank { null } ?: body
-            val cards = org.jsoup.parser.Parser.parse(frag, "$base/").select("li[id^=video-]")
+        for (url in probes.distinct()) {
+            val text = getText(url) ?: continue
+            val doc = listingFragment(text)
+            val cards = doc.select("li[id^=video-]")
             if (cards.isEmpty()) {
                 Log.d(TAG, "archive p$page: $url -> 0 cards")
                 continue
             }
-            val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
+            val fresh = cards.mapNotNull { it.toSearchFromList() }.filter { seen.add(it.url) }
             Log.d(TAG, "archive p$page: $url -> ${cards.size} cards, ${fresh.size} new, ids=" +
-                cards.joinToString(",") { it.attr("id").removePrefix("video-") })
+                cards.map { it.id().removePrefix("video-") }.take(6).joinToString(","))
             if (fresh.isNotEmpty()) return fresh
         }
-        // Nothing beyond the sections exists over HTTP - say so once instead of silently returning
-        // empty and leaving a feed that will never grow.
-        Log.d(TAG, "archive p$page: no candidate returned new items; sections are the whole feed")
+        Log.d(TAG, "archive p$page: no probe widened or shifted the feed; sections are the whole feed")
         return emptyList()
     }
 
-    /**
-     * Every discovered section gets its own row on the home screen, and each scroll appends the
-     * next page of every section - that is how CloudStream drives infinite scroll here: it calls
-     * getMainPage(1), appends getMainPage(2), getMainPage(3)... and stops when hasNext is false.
-     *
-     * Rows are built per section rather than flattened, because a flat listOf(dedupeBy(url))
-     * collapses the six categories into one anonymous strip. Nothing is deduped across rows now:
-     * a video appearing in two sections is legitimately listed under both.
-     */
+    /** The <html> fragment carried in the "html" field of the ajax listing response. */
+    private fun listingFragment(text: String): org.jsoup.nodes.Document {
+        val raw = Regex("\"html\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(text)
+            ?.groupValues?.get(1).orEmpty()
+        return org.jsoup.Jsoup.parseBodyFragment(
+            raw.replace("\\\"", "\"").replace("\\/", "/").replace("\\n", "\n")
+        )
+    }
+
+    /** Card from an <li id="video-..."> row of the ajax listing fragment. */
+    private fun org.jsoup.nodes.Element.toSearchFromList(): SearchResponse? {
+        val link = selectFirst("a.thumbnail[href], a[href]") ?: return null
+        val href = link.attr("href").trim().ifBlank { attr("href").trim() }
+        if (href.isBlank()) return null
+        val url = absolute(unwrap(href))
+        if (!url.startsWith("http")) return null
+        val title = selectFirst("h4, .video-title, .title, h2, h3")?.text()?.trim().orEmpty()
+            .ifBlank { link.attr("title").trim() }
+            .ifBlank { return null }
+        val img = selectFirst("img")
+        val poster = listOf("data-src", "data-lazy-src", "src", "data-original")
+            .firstNotNullOfOrNull { img?.attr(it)?.ifBlank { null } }.orEmpty().trim()
+        return newMovieSearchResponse(title, url, TvType.NSFW) {
+            if (poster.startsWith("http")) posterUrl = absolute(poster)
+        }
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         // Every discovered section gets its own named row on page 1 - the full set, because the
         // endpoint has no second page. From page 2 on the feed continues with the site's archive,
@@ -364,21 +378,55 @@ class JavdoeProvider : MainAPI() {
         // address elsewhere. #player-poster with .pp-play is the click-to-play overlay, which is
         // why the page shows a poster instead of a player until it is tapped. Read the iframe and
         // every data-* attribute in the document rather than assuming which one holds the address.
-        // PROBE: the post page exposes several players (POST-PROBE showed player1..player4), and
-        // every one of them may point at a different host. Dump each player container in full so the
-        // multi-source shape is read from the markup instead of guessed.
-        val players = postDoc.select("#player, #player1, #player2, #player3, #player4," +
-            "[id^=player-], .player, .video-player, .responsive-player, [id*=source], [class*=source]")
-        Log.d(TAG, "PLAYERS n=${players.size}")
-        players.take(8).forEachIndexed { i, p ->
-            val attrs = p.attributes().asList().joinToString(",") { "${it.key}=${it.value.take(60)}" }
-            Log.d(TAG, "PLAYER[$i] id=${p.attr("id")} cls=${p.attr("class")} attrs=$attrs")
-            Log.d(TAG, "PLAYER[$i] html=" + p.outerHtml().replace("\n", " ").take(700))
+// PROBE v20 - v19 established the shape of the page and killed the Byse theory:
+        //
+        //   PLAYERS n=3   ids: player-container, player, player-poster
+        //   IFRAME[0]     id=main-player  <-- and NO src attribute at all
+        //
+        // So the player is hydrated by a script on THIS page, not by an iframe src. And the
+        // decoded "embed" (mycloudz.cc/v/<code>) turns out not to be a player at all: its own
+        // ev-p1.js decodes to popunder/ad domains only - //gigg, //cack, //effe, //inso, //bvtp,
+        // epicstream-style //atti - with zero m3u8/mp4/api literals. So the Byse extractor in
+        // this repo targets the wrong platform, and no Origin header will ever fix it.
+        //
+        // The address has to come from this page. Dump every script that mentions a player or
+        // an embed, whole, plus every data-* attribute on the player area - the answer is in
+        // one of these and guessing another selector would not find it.
+        postDoc.select("script").forEachIndexed { i, sc ->
+            val body = sc.data().trim()
+            if (body.isEmpty() && sc.attr("src").isNullOrBlank()) return@forEachIndexed
+            val interesting = body.contains("player", true) || body.contains("embed", true) ||
+                body.contains("stream", true) || body.contains("m3u8", true) ||
+                body.contains("file_id", true) || body.contains("v/", true) ||
+                !sc.attr("src").isNullOrBlank()
+            if (!interesting) return@forEachIndexed
+            val src = sc.attr("src")?.let { " src=$it" }.orEmpty()
+            if (body.isEmpty()) {
+                Log.d(TAG, "SCRIPT[$i] external$src")
+            } else {
+                Log.d(TAG, "SCRIPT[$i] inline chars=${body.length}$src :: " + body.replace("\n", " ").take(900))
+            }
         }
-        postDoc.select("iframe").forEachIndexed { i, f ->
-            val a = f.attributes().asList().joinToString(",") { "${it.key}=${it.value.take(80)}" }
-            Log.d(TAG, "IFRAME[$i] $a")
+
+        // Every data-*/on* attribute anywhere near the player, which is where the frame
+        // address is usually parked before the script moves it.
+        postDoc.select("[data-url], [data-src], [data-file], [data-id], [data-video], [data-player], [onclick], [onplay], #main-player, #player-container").forEachIndexed { i, el ->
+            val attrs = el.attributes().asList().joinToString(",") { "${it.key}=${it.value.take(90)}" }
+            Log.d(TAG, "ATTR[$i] <${el.tagName()}> $attrs")
         }
+
+        // Any base64 blob on the page, and any absolute host that is not javdoe itself.
+        Regex("[A-Za-z0-9+/]{40,}={0,2}").findAll(postDoc.html()).map { it.value }
+            .distinct().take(6).forEachIndexed { i, b ->
+            val dec = runCatching {
+                String(android.util.Base64.decode(b, android.util.Base64.DEFAULT))
+            }.getOrNull()
+            Log.d(TAG, "B64[$i] $b -> ${dec?.take(120)}")
+        }
+        postDoc.select("a[href], iframe[src], script[src]").mapNotNull {
+            val h = it.attr("href").ifBlank { it.attr("src") }.trim()
+            h.takeIf { it.startsWith("http") && !it.contains("javdoe.sh") }
+        }.distinct().take(12).forEachIndexed { i, h -> Log.d(TAG, "EXT[$i] $h") }
 
         val embedSrc = postDoc.selectFirst("iframe[src], iframe[data-src]")?.let { f ->
             f.attr("src").ifBlank { f.attr("data-src") }.trim()
