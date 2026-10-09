@@ -8,30 +8,30 @@ import org.jsoup.nodes.Element
 /**
  * Javdoe (javdoe.sh) — Indonesian adult streaming, multi-server.
  *
- * Flow, verified live on 2026-10-07:
+ * Flow, as measured on the device on 2026-10-08 (earlier notes below were from a text proxy and
+ * described a hop that does not exist):
  *
- *   post        https://javdoe.sh/287017/<slug>/                (WordPress listing)
- *   embed page  https://javdoe.sh/embed/287017/                 iframe id=main-player
- *   player      https://server.javdoe.sh/javdoe_play/268544      a DIFFERENT subdomain, and the
- *                                                                play id is NOT the post id
- *                                                                (268544 vs 287017)
- *   servers     7 playEmbed(...) targets, in the order the site lists them:
- *                 turbonewvid.com/t/688f25394dd89
- *                 cloudwish.xyz/e/67d1ufd6nkdr
- *                 mycloudz.cc/v/xv6tluon2kjt
- *                 streambeast.upn.one/#menwpt
- *                 playmogo.com/e/q5cwco3nlsnj                  (DoodStream clone)
- *                 playmogo.com/e/b2ro0davj8xc
- *                 lulustream.fit/e/49krjie0mbra
+ *   listing    https://javdoe.sh/?ajax=fp_section&s=<section>   JSON wrapping an HTML fragment;
+ *              one FIXED window of cards per section. &page=, /page/<n>/ and &paged= were all
+ *              measured and all ignored - they return page 1 again, so the six sections are the
+ *              whole feed and there is nothing to scroll to.
+ *   post       https://javdoe.sh/287017/<slug>/                 server-rendered, load() reads it
+ *   embed      the post's single <iframe> keeps its address BASE64-ENCODED in src, e.g.
+ *              https://javdoe.sh/aHR0cHM6Ly9teWNsb3Vkei5jYy92L3E4eHhlNmVpNHhtcQ==
+ *              which decodes to https://mycloudz.cc/v/q8xxe6ei4xmq. Requesting the encoded string as
+ *              a path returns javdoe's own 404.
  *
- * None of those seven hosts is in CloudStream's catalogue. The final stream URL is produced by JS
- * in the browser, so it is invisible to a plain HTTP fetch — hence loadExtractor() first (it wins
- * by host name for anything known), then the Byse/ystream extractor for the /e/<code> shaped ones.
+ * There is NO server.javdoe.sh/javdoe_play hop behind these embeds - the decoded address is already
+ * the player, on its own host (v16: "no javdoe_play page on https://mycloudz.cc/v/c2babhapnrvx").
+ * So loadLinks resolves the decoded embed url directly, and only follows the playEmbed(...) list
+ * when an embed really does offer one.
  *
- * javdoe.sh resolves to an ISP block page on an unproxied network, so the structure above was
- * mapped through a third-party text proxy. That is why this ships as status=1 (beta) until it is
- * proven on hardware.
+ * None of the player hosts is in CloudStream's catalogue, and the final stream url is produced by JS
+ * in the browser, so it is invisible to a plain HTTP fetch — hence loadExtractor() first (it wins by
+ * host name for anything known), then the Byse/ystream extractor for the /v/<code> and /e/<code>
+ * shapes.
  */
+
 class JavdoeProvider : MainAPI() {
 
     // Without these two the app filters the provider out of the homepage source list:
@@ -222,34 +222,49 @@ class JavdoeProvider : MainAPI() {
     }
 
     /**
-     * The site's own archive, used to keep the home feed growing after the sections.
+     * The home feed after the sections.
      *
-     * v15 measured `$base/page/<n>/` as a dead address: every page logged `0 cards`. What to try
-     * next is read off the shell instead of guessed, so each candidate is tried once and the
-     * result logged. The first shape that yields cards wins and the feed continues from it.
+     * Three pagination guesses were measured dead on the device, and all three failed identically -
+     * the server answered, with the same 18 cards as page 1:
+     *
+     *   &page=<n>   section watched p2 .. p10 -> 18 items, ids 287099..287082 (= p1)
+     *   /page/<n>/  archive -> 0 cards
+     *   &paged=<n>  archive p2 -> 18 cards, 0 new, ids 287099..287082 (= p1)
+     *
+     * So `?ajax=fp_section` returns one fixed window per section and no parameter shifts it. A fourth
+     * guessed name will not find it; the shell already carries the loader, so read the pagination
+     * argument out of that inline script and use whatever name it actually uses.
      */
     private suspend fun archivePosts(page: Int): List<SearchResponse> {
-        val candidates = listOf(
-            "$base/?ajax=fp_section&s=watched&paged=$page",
-            "$base/page/$page/",
-            "$base/?s=&paged=$page",
-            "$base/?ajax=fp_list&paged=$page"
-        )
+        val shell = org.jsoup.parser.Parser.parse(
+            getText("$base/?ajax=fp_section&s=watched") ?: return emptyList(), "$base/")
+        val inline = shell.select("script").filter { it.attr("src").isNullOrBlank() }
+            .joinToString(" ") { it.data() }
+
+        val params = Regex("""(page|paged|pagination|offset|start|load_more|more)\s*[:=]""",
+            RegexOption.IGNORE_CASE).findAll(inline).map { it.groupValues[1].lowercase() }
+            .distinct().toList()
+        Log.d(TAG, "archive p$page: loader pagination names = $params")
+
+        val candidates = buildList {
+            params.forEach { add("$base/?ajax=fp_section&s=watched&$it=$page") }
+            add("$base/category/mature/")
+            add("$base/tag/javhd/")
+        }
+
         for (url in candidates) {
             val body = getText(url) ?: continue
-            // The section endpoint wraps markup in JSON; the plain pages serve markup directly.
-            val html = jsonString(body, "html")?.ifBlank { null } ?: body
-            val parsed = org.jsoup.parser.Parser.parse(html, "$base/")
-            val cards = parsed.select("li[id^=video-]")
-            if (cards.isEmpty()) {
-                Log.d(TAG, "archive p$page: $url -> 0 cards")
-                continue
-            }
+            val frag = jsonString(body, "html")?.ifBlank { null } ?: body
+            val cards = org.jsoup.parser.Parser.parse(frag, "$base/").select("li[id^=video-]")
+            if (cards.isEmpty()) continue
             val fresh = cards.mapNotNull { it.toSearch() }.filter { seen.add(it.url) }
             Log.d(TAG, "archive p$page: $url -> ${cards.size} cards, ${fresh.size} new, ids=" +
                 cards.joinToString(",") { it.attr("id").removePrefix("video-") })
-            return fresh
+            if (fresh.isNotEmpty()) return fresh
         }
+        // Nothing beyond the sections exists over HTTP - say so once instead of silently returning
+        // empty and leaving a feed that will never grow.
+        Log.d(TAG, "archive p$page: no candidate returned new items; sections are the whole feed")
         return emptyList()
     }
     /** Search hits DO come from the server-rendered page - that one is not client-rendered. */
@@ -362,39 +377,47 @@ class JavdoeProvider : MainAPI() {
         }
         Log.d(TAG, "embed page: $embedSrc")
 
-        // The real hosts live one hop further: a different subdomain, behind a play id that is not
-        // the post id. Without this hop there is nothing to resolve.
+        // v16 device log settled the hop structure - it is not what the header comment claimed:
+        //
+        //   embed page: https://mycloudz.cc/v/c2babhapnrvx
+        //   GET ... -> ok (Embed)
+        //   E/Javdoe: no javdoe_play page on https://mycloudz.cc/v/c2babhapnrvx
+        //
+        // The decoded src is already a ystream/Byse page on its own host; there is no
+        // server.javdoe.sh/javdoe_play hop behind it. The post -> embed -> javdoe_play chain the
+        // header describes does not exist for these embeds, and requiring one made every video end
+        // in "no link found".
+        //
+        // So the embed url is treated as the thing to resolve, and the old hop is used only for the
+        // embeds that really do carry a playEmbed(...) call.
         val embedDoc = get(embedSrc, referer = data) ?: return false
+
         val playerPage = embedDoc.select("script")
             .firstNotNullOfOrNull { extractPlayerUrl(it.data()) }
             ?: embedDoc.select("a[href], [data-url]")
                 .firstOrNull { (it.attr("href") + it.attr("data-url")).contains("javdoe_play") }
                 ?.let { it.attr("href").ifBlank { it.attr("data-url") }.trim() }
-                ?.let { fixUrl(it) }
+                ?.let { absolute(it) }
 
-        if (playerPage.isNullOrBlank()) {
-            Log.e(TAG, "no javdoe_play page on $embedSrc")
-            return false
+        // playEmbed('...') appears once per server button, on the player page when there is one.
+        val servers = if (playerPage.isNullOrBlank()) {
+            Log.d(TAG, "no javdoe_play hop; resolving embed page directly: $embedSrc")
+            listOf(embedSrc)
+        } else {
+            Log.d(TAG, "player page: $playerPage")
+            val playerDoc = get(playerPage, referer = embedSrc) ?: return false
+            Regex("""playEmbed\(\s*['"]([^'"]+)['"]\s*\)""")
+                .findAll(playerDoc.html())
+                .map { it.groupValues[1].trim() }
+                .filter { it.isNotBlank() }
+                .map { absolute(it) }
+                .filter { it.startsWith("http") }
+                .distinct()
+                .toList()
+                .ifEmpty { listOf(embedSrc) }
         }
-        Log.d(TAG, "player page: $playerPage")
 
-        val playerDoc = get(playerPage, referer = embedSrc) ?: return false
-
-        // playEmbed('...') appears once per server button.
-        val servers = Regex("""playEmbed\(\s*['"]([^'"]+)['"]\s*\)""")
-            .findAll(playerDoc.html())
-            .map { it.groupValues[1].trim() }
-            .filter { it.isNotBlank() }
-            .map { fixUrl(it) }
-            .filter { it.startsWith("http") }
-            .distinct()
-            .toList()
-
-        if (servers.isEmpty()) {
-            Log.e(TAG, "no servers listed on $playerPage")
-            return false
-        }
-        Log.d(TAG, "${servers.size} servers: $servers")
+        Log.d(TAG, "${servers.size} server(s): $servers")
 
         for (url in servers) {
             // Every server gets a turn: one dead host must not end the attempt. The callback is
