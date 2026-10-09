@@ -522,15 +522,20 @@ class JavdoeProvider : MainAPI() {
         list.forEachIndexed { i, u -> Log.d(TAG, "SRV[$i] $u") }
 
         for (url in list) {
-            // Every server gets a turn: one dead host must not end the attempt. The callback is
-            // wrapped so an extractor that emits nothing does not consume the only try, and so the
-            // urls it produced can be inspected before they are handed to the player - a wrapper
-            // that only sets a flag cannot tell a good url from a broken one.
-            emittedThisServer.clear()
+            // Every server gets a turn: one dead host must not end the attempt, and the callback
+            // is wrapped per server so the urls that server produced can be judged BEFORE any of
+            // them is handed to the player.
+            //
+            // That order matters. v22 and v23 both forwarded to callback() first and only then
+            // checked the result, so the check could never block anything - the player was handed
+            // cdn.streamcash.to/videos/#69oyoa/index.m3u8 regardless of what the verdict said.
+            // The check was advisory. Now the emitted urls are collected, judged, and only the
+            // survivors are forwarded; a server that produced nothing usable passes nothing on and
+            // the search moves to the next host.
+            val emitted = java.util.concurrent.CopyOnWriteArrayList<ExtractorLink>()
             val wrap: (ExtractorLink) -> Unit = { link ->
-                emittedThisServer.add(link.url)
+                emitted.add(link)
                 Log.d(TAG, "EMIT ${link.name} ${link.type} ${link.url}")
-                callback(link)
             }
 
             try {
@@ -551,14 +556,14 @@ class JavdoeProvider : MainAPI() {
                 // on its own terms, and the fuzzy fallback specifically has to be refused, because
                 // it is exactly the thing that invented that url. Check emitted FIRST and keep the
                 // whole try only if the extractor actually handed over a real, well-formed url.
-                if (loadExtractor(url, data, subtitleCallback, wrap) && emittedThisServer.isNotEmpty()) {
-                    if (allEmittedUsable()) return true
+                if (loadExtractor(url, data, subtitleCallback, wrap) && emitted.isNotEmpty()) {
+                    if (forwardUsable(emitted, callback)) return true
                     Log.e(TAG, "builtin gave unusable urls for $url -> falling through")
                 }
 
                 if (isByseShaped(url)) {
                     YstreamExtractor().getUrl(url, data, subtitleCallback, wrap)
-                    if (emittedThisServer.isNotEmpty() && allEmittedUsable()) return true
+                    if (emitted.isNotEmpty() && forwardUsable(emitted, callback)) return true
                 }
 
                 Log.e(TAG, "no link from $url")
@@ -570,39 +575,62 @@ class JavdoeProvider : MainAPI() {
     }
 
     /**
-     * Judges what the current server's extractor(s) handed to the callback.
+     * Judges one server's collected links and forwards the survivors to the real callback.
      *
-     * The callback is wrapped by loadLinks so every link an extractor produces is recorded here
-     * instead of going straight to the player. A link is usable only if it is well formed - a
-     * fragment left in the path (cdn.streamcash.to/videos/#69oyoa/index.m3u8) resolves to a
-     * directory, never to the media, and is rejected by the CDN with 403.
-     *
-     * Kept as a per-server list so one server's junk cannot make the next one look fine, and so
-     * the log says which server produced what.
+     * Returns true when at least one link was passed on, which is what tells loadLinks this server
+     * is done. Links are only forwarded after the verdict, never before - see the loop above.
      */
-    private val emittedThisServer = java.util.concurrent.CopyOnWriteArrayList<String>()
-
-    /** True when at least one link was emitted this server and that link is usable. */
-    private fun allEmittedUsable(): Boolean =
-        emittedThisServer.isNotEmpty() && emittedThisServer.any { usableStreamUrl(it) }
+    private fun forwardUsable(
+        emitted: List<ExtractorLink>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val good = emitted.filter { usableStreamUrl(it.url) }
+        if (good.isEmpty()) {
+            Log.e(TAG, "  rejected ${emitted.size} link(s): " +
+                emitted.joinToString(" ; ") { "${it.name}=${it.url}" })
+            return false
+        }
+        good.forEach { link ->
+            Log.d(TAG, "  ACCEPT ${link.name} ${link.type} ${link.url}")
+            callback(link)
+        }
+        if (good.size < emitted.size) {
+            Log.d(TAG, "  dropped ${emitted.size - good.size} of ${emitted.size} link(s) as unusable")
+        }
+        return true
+    }
 
     /**
-     * A stream url ExoPlayer can actually fetch: absolute http(s), no fragment or query left in
-     * the path, and a media-looking tail (m3u8 / mp4 / ts / mpd, or at least a file name after the
-     * last slash). Anything else is a directory, a tracking wrapper or a build artefact.
+     * A stream url ExoPlayer can actually fetch.
+     *
+     * The only real test is whether the url survives to its path: a '#' turns everything after it
+     * into a fragment, so https://cdn.streamcash.to/videos/#69oyoa/index.m3u8 is really a request
+     * for .../videos/ - a directory - which the CDN answers with 403 (CloudStream reports that as
+     * error 2004, ERROR_CODE_IO_BAD_HTTP_STATUS).
+     *
+     * What is deliberately NOT required is a file extension. v23 rejected the two links that
+     * actually worked, because it demanded a dot in the last path segment:
+     *
+     *   streamtape.net/get_video?id=Lpv7JjOBDGSRrgA&expires=...&token=7zHNY0ONBSw6&stream=1
+     *   ws948cd.cloudatacdn.com/u5kjv73gphpls.../ekmxbro4g8~twcw6RcLro?token=dq5iznf3uipck0x6f
+     *
+     * Both are token endpoints - the extension is in the query string, not the path, which is the
+     * norm for this family of hosts. So a path segment with no dot is fine; a path that resolves to
+     * a directory is not.
      */
     private fun usableStreamUrl(url: String): Boolean {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
-        val noFragment = url.substringBefore('#').substringBefore('?')
-        if (noFragment.isBlank()) return false
-        val path = runCatching { java.net.URI(noFragment).path }.getOrNull() ?: return false
-        if (path.isBlank() || path.endsWith('/')) return false
+        // A fragment is never sent to the server, so the request would only ever cover what is
+        // before it. If that prefix is a bare directory, the url is unusable however it is spelled.
+        val beforeFragment = url.substringBefore('#')
+        val path = runCatching { java.net.URI(beforeFragment).path }.getOrNull() ?: return false
+        if (path.isBlank()) return false
+        if (path.endsWith('/')) return false
         val tail = path.substringAfterLast('/')
-        if (tail.isBlank()) return false
-        // m3u8 variants and progressive files are unambiguous.
-        if (Regex("\\.(m3u8|mpd|mp4|m4v|webm|ts)(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(noFragment)) return true
-        // Otherwise require a real file name (an extension) rather than a bare id directory.
-        return tail.contains('.')
+        if (tail.isBlank() || tail == "." || tail == "..") return false
+        // Reject a leftover scheme-only or host-only spelling.
+        if (tail.contains(':')) return false
+        return true
     }
 
     /**
