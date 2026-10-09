@@ -512,19 +512,42 @@ class JavdoeProvider : MainAPI() {
 
         for (url in list) {
             // Every server gets a turn: one dead host must not end the attempt. The callback is
-            // wrapped so an extractor that emits nothing does not consume the only try.
-            val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
-            val wrap: (ExtractorLink) -> Unit = { emitted.set(true); callback(it) }
+            // wrapped so an extractor that emits nothing does not consume the only try, and so the
+            // urls it produced can be inspected before they are handed to the player - a wrapper
+            // that only sets a flag cannot tell a good url from a broken one.
+            emittedThisServer.clear()
+            val wrap: (ExtractorLink) -> Unit = { link ->
+                emittedThisServer.add(link.url)
+                Log.d(TAG, "EMIT ${link.name} ${link.type} ${link.url}")
+                callback(link)
+            }
 
             try {
                 // Built-ins match on host name and win for anything they know - StreamTapeNet and
                 // Playmogo among them. This must run before the Byse shape test below, which would
                 // otherwise hijack playmogo (a DoodStream clone serving the same /e/<code> path).
-                if (loadExtractor(url, data, subtitleCallback, wrap) && emitted.get()) return true
+                //
+                // loadExtractor() only returns true when a host matched, NOT when a link came out
+                // - and it ALWAYS returns true on the fuzzy-mirror fallback. That fallback compares
+                // hosts by similarity above 80, so "streambeast.upn.one/#69oyoa" was matched by
+                // Streamcash's "https://streamcash.to" (rate ~82) and its id was taken as
+                // substringAfterLast("/") = "#69oyoa", giving the junk url
+                //   https://cdn.streamcash.to/videos/#69oyoa/index.m3u8
+                // whose '#' makes the rest a URI fragment, so ExoPlayer requested
+                // ".../videos/" and got 403 -> ERROR_CODE_IO_BAD_HTTP_STATUS (2004).
+                //
+                // So a matching extractor is not enough: the address it produced has to be judged
+                // on its own terms, and the fuzzy fallback specifically has to be refused, because
+                // it is exactly the thing that invented that url. Check emitted FIRST and keep the
+                // whole try only if the extractor actually handed over a real, well-formed url.
+                if (loadExtractor(url, data, subtitleCallback, wrap) && emittedThisServer.isNotEmpty()) {
+                    if (allEmittedUsable()) return true
+                    Log.e(TAG, "builtin gave unusable urls for $url -> falling through")
+                }
 
                 if (isByseShaped(url)) {
                     YstreamExtractor().getUrl(url, data, subtitleCallback, wrap)
-                    if (emitted.get()) return true
+                    if (emittedThisServer.isNotEmpty() && allEmittedUsable()) return true
                 }
 
                 Log.e(TAG, "no link from $url")
@@ -533,6 +556,42 @@ class JavdoeProvider : MainAPI() {
             }
         }
         return false
+    }
+
+    /**
+     * Judges what the current server's extractor(s) handed to the callback.
+     *
+     * The callback is wrapped by loadLinks so every link an extractor produces is recorded here
+     * instead of going straight to the player. A link is usable only if it is well formed - a
+     * fragment left in the path (cdn.streamcash.to/videos/#69oyoa/index.m3u8) resolves to a
+     * directory, never to the media, and is rejected by the CDN with 403.
+     *
+     * Kept as a per-server list so one server's junk cannot make the next one look fine, and so
+     * the log says which server produced what.
+     */
+    private val emittedThisServer = java.util.concurrent.CopyOnWriteArrayList<String>()
+
+    /** True when at least one link was emitted this server and every one of them is usable. */
+    private fun allEmittedUsable(): Boolean =
+        emittedThisServer.isNotEmpty() && emittedThisServer.all { usableStreamUrl(it) }
+
+    /**
+     * A stream url ExoPlayer can actually fetch: absolute http(s), no fragment or query left in
+     * the path, and a media-looking tail (m3u8 / mp4 / ts / mpd, or at least a file name after the
+     * last slash). Anything else is a directory, a tracking wrapper or a build artefact.
+     */
+    private fun usableStreamUrl(url: String): Boolean {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return false
+        val noFragment = url.substringBefore('#').substringBefore('?')
+        if (noFragment.isBlank()) return false
+        val path = runCatching { java.net.URI(noFragment).path }.getOrNull() ?: return false
+        if (path.isBlank() || path.endsWith('/')) return false
+        val tail = path.substringAfterLast('/')
+        if (tail.isBlank()) return false
+        // m3u8 variants and progressive files are unambiguous.
+        if (Regex("\\.(m3u8|mpd|mp4|m4v|webm|ts)(\\?|$)", RegexOption.IGNORE_CASE).containsMatchIn(noFragment)) return true
+        // Otherwise require a real file name (an extension) rather than a bare id directory.
+        return tail.contains('.')
     }
 
     /**
