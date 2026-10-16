@@ -221,7 +221,7 @@ class JavSegarProvider : MainAPI() {
                 collected.add(link)
             }
             if (loadExtractor(data, data, subtitleCallback, collect)) {
-                val kept = collapseVariants(collected)
+                val kept = collapseVariants(collected, host)
                 Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}, " +
                     "kept ${kept.size}/${collected.size}")
                 kept.forEach(callback)
@@ -273,15 +273,37 @@ class JavSegarProvider : MainAPI() {
      * Exact duplicate URLs are dropped too, and mirrors on other hosts are left
      * alone: those are genuinely different servers, not a rendition of this one.
      */
-    private fun collapseVariants(links: List<ExtractorLink>): List<ExtractorLink> {
-        val masterDirs = links.mapNotNull { link ->
+    private fun collapseVariants(links: List<ExtractorLink>, embedHost: String): List<ExtractorLink> {
+        // The site declares exactly one source. Captured from the live page by
+        // evaluating its packed script and stubbing jwplayer, the setup config
+        // holds a single relative path:
+        //
+        //   /stream/wUrx9rq9YKqtDiEAeFZV8g/.../master.m3u8
+        //
+        // whose master has two variants and no I-frame track at all:
+        //
+        //   RESOLUTION=852x480   index-f1-v1-a1.m3u8
+        //   RESOLUTION=1280x720  index-f2-v1-a1.m3u8
+        //
+        // The extra links Cloudstream produced (a streamhide.to master, an
+        // acek-cdn.com master) are not mirrors the site offers -- they are
+        // stale references its fallback regex scraped out of the packed script.
+        // On the device one of them hangs forever and the other shows a
+        // duplicated resolution. Prefer the embed's own host when we have one.
+        val onEmbedHost = links.filter { it.url.substringAfter("//", "").substringBefore('/') == embedHost }
+        val pool = if (onEmbedHost.isNotEmpty()) {
+            Log.d(TAG, "collapse: ${onEmbedHost.size}/${links.size} links on $embedHost, others scraped")
+            onEmbedHost
+        } else links
+
+        val masterDirs = pool.mapNotNull { link ->
             val path = link.url.substringBefore('?').substringAfter("//", "")
             val dir = path.substringBeforeLast('/', "")
             if (path.substringAfterLast('/').startsWith("master")) dir else null
         }.toSet()
 
         val seen = mutableSetOf<String>()
-        return links.filter { link ->
+        return pool.filter { link ->
             val path = link.url.substringBefore('?').substringAfter("//", "")
             val file = path.substringAfterLast('/')
             val dir = path.substringBeforeLast('/', "")
