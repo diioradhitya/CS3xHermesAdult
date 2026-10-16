@@ -176,11 +176,23 @@ class JavSegarProvider : MainAPI() {
         if (data.isBlank()) return false
 
         val host = data.substringAfter("://", "").substringBefore('/').lowercase()
+        Log.d(TAG, "loadLinks $data (host=$host)")
+
+        // Every branch reports whether it actually produced a link. Returning
+        // true just because a handler ran is what made a failure look like a
+        // success until Cloudstream finally rendered "no links found" with
+        // nothing in the log to explain it.
+        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val wrap: (ExtractorLink) -> Unit = { link ->
+            emitted.set(true)
+            callback(link)
+        }
 
         // streamtape.to has no built-in extractor (CS ships .com/.net/.xyz),
         // so it is handled before the generic loadExtractor pass.
         if (host.startsWith("streamtape.")) {
-            StreamTapeToExtractor().getUrl(data, data, subtitleCallback, callback)
+            StreamTapeToExtractor().getUrl(data, data, subtitleCallback, wrap)
+            Log.d(TAG, "loadLinks streamtape emitted=${emitted.get()}")
             return true
         }
 
@@ -188,7 +200,10 @@ class JavSegarProvider : MainAPI() {
         // covered by CloudStream's built-in extractors - let them try first,
         // they match on host name. The Byse regex below matches any
         // /e/<code> path and would otherwise wrongly capture them.
-        if (loadExtractor(data, data, subtitleCallback, callback)) return true
+        if (loadExtractor(data, data, subtitleCallback, wrap)) {
+            Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}")
+            return true
+        }
 
         // Nothing claimed it: treat as Byse/ystream family, matched on the
         // embed code path so a rotated host still routes here instead of
@@ -196,10 +211,14 @@ class JavSegarProvider : MainAPI() {
         return when {
             data.contains("ystream") || data.contains("byse") ||
                 Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
-                YstreamExtractor().getUrl(data, data, subtitleCallback, callback)
+                YstreamExtractor().getUrl(data, data, subtitleCallback, wrap)
+                Log.d(TAG, "loadLinks ystream emitted=${emitted.get()}")
                 true
             }
-            else -> false
+            else -> {
+                Log.e(TAG, "loadLinks: nothing handled $host")
+                false
+            }
         }
     }
 

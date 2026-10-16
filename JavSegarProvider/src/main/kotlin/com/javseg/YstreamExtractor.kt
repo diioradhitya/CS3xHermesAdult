@@ -460,12 +460,58 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "stream URL: ${streamUrl.take(80)}...")
 
-        M3u8Helper.generateM3u8(
-            name,
-            streamUrl,
-            refererUrl,
-            headers = mapOf("Referer" to "https://ystream.id/e/$code/", "User-Agent" to ua)
-        ).forEach(callback)
+        val streamHeaders = mapOf("Referer" to "$siteOrigin/e/$code/", "User-Agent" to ua)
+
+        // The decrypted payload carries one source; the resolutions come from
+        // the master playlist. generateM3u8 expands that master into one
+        // ExtractorLink per variant, which is why the source list showed an
+        // entry per resolution -- and, with the I-frame track counted as a
+        // variant, sometimes the very same resolution twice.
+        //
+        // These masters also carry an #EXT-X-I-FRAME-STREAM-INF trick-play
+        // track reporting the same RESOLUTION as the rendition, and ExoPlayer
+        // lists both as video tracks. Point at the variant itself when there
+        // is exactly one real rendition: nothing to pick between anyway, and
+        // the duplicate disappears. Keep the master when there is a genuine
+        // ladder so the quality selector keeps working.
+        val finalUrl = resolveSingleVariant(streamUrl, streamHeaders)
+        Log.d(TAG, "final URL: ${finalUrl.take(80)}...")
+
+        callback(
+            newExtractorLink(name, name, finalUrl) {
+                this.referer = refererUrl
+                this.headers = streamHeaders
+            }
+        )
+    }
+
+    /**
+     * Returns the variant playlist URL when [masterUrl] has exactly one real
+     * rendition, otherwise [masterUrl] untouched so the player keeps the full
+     * ladder for its quality selector.
+     */
+    private fun resolveSingleVariant(masterUrl: String, headers: Map<String, String>): String {
+        val text = httpGet(masterUrl, headers) ?: return masterUrl
+        val variants = mutableListOf<String>()
+        var pending = false
+        for (line in text.lineSequence()) {
+            val t = line.trim()
+            when {
+                t.startsWith("#EXT-X-STREAM-INF:") -> pending = true
+                // Trick-play track, not a rendition.
+                t.startsWith("#EXT-X-I-FRAME-STREAM-INF") -> Unit
+                t.isEmpty() || t.startsWith("#") -> Unit
+                pending -> {
+                    variants += t
+                    pending = false
+                }
+            }
+        }
+        Log.d(TAG, "master has ${variants.size} real variant(s)")
+        if (variants.size != 1) return masterUrl
+        val variant = variants.first()
+        if (variant.startsWith("http")) return variant
+        return runCatching { URI(masterUrl).resolve(variant).toString() }.getOrDefault(masterUrl)
     }
 }
 
