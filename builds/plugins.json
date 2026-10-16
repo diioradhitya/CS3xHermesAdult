@@ -2,14 +2,14 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 21,
+    "version": 22,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
       "Dio R"
     ],
     "description": "AVTube - Indonesian adult streaming (fixed Morencius+EarnVids m3u8, Ystream verified)",
-    "fileSize": 44132,
+    "fileSize": 45106,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "language": "id",
     "tvTypes": [
@@ -17,7 +17,7 @@
     ],
     "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-76aa1e6eb851de1dda5a76e01c40543754738d3e44169e43f98d03dd5d307ebe"
+    "fileHash": "sha256-2beebebf939941520fd91a9e25b58b793740b7d32f14311dbf7701cbd9714e2d"
   },
   {
     "iconUrl": "https://javhd.com/wp-content/uploads/2024/06/javhd-logo.png",
