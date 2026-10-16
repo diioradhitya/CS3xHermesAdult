@@ -140,16 +140,32 @@ class AVTubeProvider : MainAPI() {
                         }
 
                         withContext(Dispatchers.IO) {
-                            if (loadExtractor(fixedUrl, data, subtitleCallback, wrap)) {
-                                return@withContext true
-                            }
+                            // Order still matters -- a shape-only match would
+                            // hijack a Doodstream embed (v18's bug) -- but
+                            // "an extractor claimed this host" is not the same
+                            // as "an extractor produced a link". loadExtractor
+                            // returns true on the claim, and Cloudstream's
+                            // WebViewResolver matches *any* URL: it claimed
+                            // ystream.id, spent 15s in a WebView on the SPA
+                            // shell, produced nothing, and the early return
+                            // meant YstreamExtractor never ran at all. The
+                            // title then reported "No Links Found" even though
+                            // /api/videos/<code>/embed/details answers 200.
+                            //
+                            // So skip loadExtractor only when the host name is
+                            // one of ours -- that cannot collide with a built-in
+                            // host, and it saves the 15s WebView wait.
+                            val ours = isKnownFamilyHost(fixedUrl)
+                            if (!ours) loadExtractor(fixedUrl, data, subtitleCallback, wrap)
 
-                            when {
-                                isMorenciusFamily(fixedUrl) ->
-                                    Morencius().getUrl(fixedUrl, data, subtitleCallback, wrap)
-                                isYstreamFamily(fixedUrl) ->
-                                    YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
-                                else -> android.util.Log.e(TAG, "no extractor claimed $fixedUrl")
+                            if (!emitted.get()) {
+                                when {
+                                    isMorenciusFamily(fixedUrl) ->
+                                        Morencius().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                                    isYstreamFamily(fixedUrl) ->
+                                        YstreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                                    else -> android.util.Log.e(TAG, "no extractor claimed $fixedUrl")
+                                }
                             }
                         }
                         if (emitted.get()) return true
@@ -162,26 +178,47 @@ class AVTubeProvider : MainAPI() {
             }
 
     /**
+     * Host-name match only, no path shape. Safe to act on without risking a
+     * built-in extractor being bypassed, so it is what decides whether the
+     * generic loadExtractor pass is worth running at all.
+     */
+    private fun isKnownFamilyHost(url: String): Boolean =
+        isYstreamHost(url) || isMorenciusHost(url)
+
+    private fun hostOf(url: String): String =
+        url.substringAfter("://", "").substringBefore('/').substringBefore(':').lowercase()
+
+    private fun isYstreamHost(url: String): Boolean {
+        val host = hostOf(url)
+        return YSTREAM_HOSTS.any { host.contains(it) }
+    }
+
+    private fun isMorenciusHost(url: String): Boolean {
+        val host = hostOf(url)
+        return MORENCIUS_HOSTS.any { host.contains(it) }
+    }
+
+    /**
      * Byse/ystream embeds always carry a short alphanumeric code on an /e/<code>
-     * or /d/<code> path. This runs only after loadExtractor declines, so the shape
-     * means "unclaimed host, Byse-shaped path" - which is how a rotated domain
-     * is still recognised without hijacking a built-in host.
+     * or /d/<code> path. The host-name list is checked first; the shape is only
+     * trusted for a host nothing else claimed, which is how a rotated domain is
+     * still recognised without hijacking a built-in host.
      */
     private fun isYstreamFamily(url: String): Boolean {
-        val host = url.substringAfter("://", "").substringBefore('/').lowercase()
-        if (listOf("ystream", "byse", "f7hyg4q", "n1mwq").any { host.contains(it) }) {
-            return true
-        }
+        if (isYstreamHost(url)) return true
         return Regex("""https?://[^/]+/(?:e|d|v)/[A-Za-z0-9]{6,}""").containsMatchIn(url)
     }
 
-    private fun isMorenciusFamily(url: String): Boolean {
-        val host = url.substringAfter("://", "").substringBefore('/').lowercase()
-        return listOf("morencius", "dingtezuni", "mivalyo", "ryderjet", "bingezove", "movearnpre")
-            .any { host.contains(it) }
-    }
+    private fun isMorenciusFamily(url: String): Boolean = isMorenciusHost(url)
 
     companion object {
         private const val TAG = "AVTubeProvider"
+
+        // Host fragments seen for the Byse/ystream family. The API host rotates
+        // per video, so these are matched as substrings of the host rather than
+        // pinned domains.
+        private val YSTREAM_HOSTS = listOf("ystream", "byse", "f7hyg4q", "n1mwq")
+        private val MORENCIUS_HOSTS =
+            listOf("morencius", "dingtezuni", "mivalyo", "ryderjet", "bingezove", "movearnpre")
     }
 }
