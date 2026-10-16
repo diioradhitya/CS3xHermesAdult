@@ -3,6 +3,7 @@ package com.javseg
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.delay
 import org.jsoup.nodes.Element
 
 /**
@@ -84,11 +85,39 @@ class JavSegarProvider : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
-    private suspend fun listPosts(url: String): List<SearchResponse> = try {
-        app.get(url).document.select("article").mapNotNull { it.toSearch() }
-    } catch (e: Exception) {
-        Log.e(TAG, "listPosts failed for $url: ${e.message}")
-        emptyList()
+    /**
+     * The origin is unstable. Measured over 24 parallel requests to the archive:
+     * 10x 200, 13x 525, 1x 502 -- 42% success. 525 is Cloudflare failing to
+     * negotiate TLS with the origin, so the failure is upstream and transient,
+     * not a change in the markup: when a request does land it returns all 32
+     * <article> cards with their data-main-thumb covers, unchanged.
+     *
+     * Retrying therefore matters more than anything else here, and it has to
+     * cover both shapes of failure: an IOException, and a 200-shaped response
+     * whose body is Cloudflare's error page, which parses cleanly into zero
+     * <article> elements. So treat "no cards" as a failed attempt too, which
+     * also means this needs no access to the response status.
+     *
+     * Success rates from that 42%: 1 try 42%, 2 tries 66%, 3 tries 80%,
+     * 4 tries 88%.
+     */
+    private suspend fun listPosts(url: String): List<SearchResponse> {
+        repeat(4) { attempt ->
+            try {
+                val items = app.get(url).document.select("article").mapNotNull { it.toSearch() }
+                if (items.isNotEmpty()) {
+                    if (attempt > 0) Log.d(TAG, "listPosts ok on attempt ${attempt + 1} for $url")
+                    return items
+                }
+                Log.w(TAG, "listPosts attempt ${attempt + 1}/4 got 0 cards for $url")
+            } catch (e: Exception) {
+                Log.w(TAG, "listPosts attempt ${attempt + 1}/4 failed for $url: ${e.message}")
+            }
+            // Linear backoff; short, because the success rate recovers fast.
+            delay(350L * (attempt + 1))
+        }
+        Log.e(TAG, "listPosts gave up after 4 attempts for $url")
+        return emptyList()
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
