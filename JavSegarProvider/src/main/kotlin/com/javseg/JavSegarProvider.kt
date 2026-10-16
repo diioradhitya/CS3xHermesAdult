@@ -86,38 +86,47 @@ class JavSegarProvider : MainAPI() {
     }
 
     /**
-     * The origin is unstable. Measured over 24 parallel requests to the archive:
-     * 10x 200, 13x 525, 1x 502 -- 42% success. 525 is Cloudflare failing to
-     * negotiate TLS with the origin, so the failure is upstream and transient,
-     * not a change in the markup: when a request does land it returns all 32
-     * <article> cards with their data-main-thumb covers, unchanged.
+     * Fetch [url] with bounded retries, or null if every attempt fails.
+     *
+     * The origin is unstable. Measured over 24 parallel requests to the
+     * archive: 10x 200, 13x 525, 1x 502 -- 42% success. 525 is Cloudflare
+     * failing to negotiate TLS with the origin, so the failure is upstream and
+     * transient, not a change in the markup: when a request does land, both the
+     * archive and a post page come back complete.
      *
      * Retrying therefore matters more than anything else here, and it has to
      * cover both shapes of failure: an IOException, and a 200-shaped response
-     * whose body is Cloudflare's error page, which parses cleanly into zero
-     * <article> elements. So treat "no cards" as a failed attempt too, which
-     * also means this needs no access to the response status.
+     * whose body is Cloudflare's error page, which parses cleanly into an
+     * empty document. So treat "nothing worth reading" as a failed attempt too,
+     * which also means this needs no access to the response status.
      *
-     * Success rates from that 42%: 1 try 42%, 2 tries 66%, 3 tries 80%,
+     * Projected from that 42%: 1 try 42%, 2 tries 66%, 3 tries 80%,
      * 4 tries 88%.
      */
-    private suspend fun listPosts(url: String): List<SearchResponse> {
-        repeat(4) { attempt ->
+    private suspend fun fetchDocument(url: String, attempts: Int = 4): org.jsoup.nodes.Document? {
+        repeat(attempts) { attempt ->
             try {
-                val items = app.get(url).document.select("article").mapNotNull { it.toSearch() }
-                if (items.isNotEmpty()) {
-                    if (attempt > 0) Log.d(TAG, "listPosts ok on attempt ${attempt + 1} for $url")
-                    return items
+                val doc = app.get(url).document
+                // Both page shapes carry an h1 or article cards; Cloudflare's
+                // error page carries neither.
+                if (doc.select("h1, article").isNotEmpty()) {
+                    if (attempt > 0) Log.d(TAG, "fetch ok on attempt ${attempt + 1} for $url")
+                    return doc
                 }
-                Log.w(TAG, "listPosts attempt ${attempt + 1}/4 got 0 cards for $url")
+                Log.w(TAG, "fetch attempt ${attempt + 1}/$attempts got an empty document for $url")
             } catch (e: Exception) {
-                Log.w(TAG, "listPosts attempt ${attempt + 1}/4 failed for $url: ${e.message}")
+                Log.w(TAG, "fetch attempt ${attempt + 1}/$attempts failed for $url: ${e.message}")
             }
             // Linear backoff; short, because the success rate recovers fast.
             delay(350L * (attempt + 1))
         }
-        Log.e(TAG, "listPosts gave up after 4 attempts for $url")
-        return emptyList()
+        Log.e(TAG, "fetch gave up after $attempts attempts for $url")
+        return null
+    }
+
+    private suspend fun listPosts(url: String): List<SearchResponse> {
+        val doc = fetchDocument(url) ?: return emptyList()
+        return doc.select("article").mapNotNull { it.toSearch() }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -127,7 +136,13 @@ class JavSegarProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url).document
+        // Same flapping origin as the listing: without retries a single 525
+        // threw out of here and Cloudstream rendered "not found", even though
+        // the page loads fine in a browser moments later.
+        val doc = fetchDocument(url) ?: run {
+            Log.e(TAG, "load: giving up on $url")
+            return null
+        }
 
         val title = doc.selectFirst("h1.entry-title")?.text()?.trim()
             ?: doc.selectFirst("h1")?.text()?.trim()
