@@ -200,17 +200,26 @@ class JavSegarProvider : MainAPI() {
         // covered by CloudStream's built-in extractors - let them try first,
         // they match on host name. The Byse regex below matches any
         // /e/<code> path and would otherwise wrongly capture them.
-        if (loadExtractor(data, data, subtitleCallback, wrap)) {
+        //
+        // Except for hosts we know are ours. Cloudstream's fallback matcher
+        // compares only a sliding window and its edit distance is capped at 1,
+        // so a short unrelated mainUrl clears the 80 threshold against almost
+        // anything -- Gdriveplayer, Dailymotion and Voe all "match"
+        // ystream.id. One of them claimed the URL, spent 15s in a WebView,
+        // emitted nothing, and loadExtractor still returned true, so
+        // YstreamExtractor never ran and the title reported no links. Verified
+        // on device: "loadExtractor handled ystream.id, emitted=false" after
+        // 16s. Matching on host name instead cannot collide like that.
+        val ours = isYstreamHost(data)
+        if (!ours && loadExtractor(data, data, subtitleCallback, wrap)) {
             Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}")
             return true
         }
 
-        // Nothing claimed it: treat as Byse/ystream family, matched on the
-        // embed code path so a rotated host still routes here instead of
-        // returning "no links found".
+        // Nothing claimed it, or it is ours: treat as Byse/ystream family,
+        // matched on the embed code path so a rotated host still routes here.
         return when {
-            data.contains("ystream") || data.contains("byse") ||
-                Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
+            ours || Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
                 YstreamExtractor().getUrl(data, data, subtitleCallback, wrap)
                 Log.d(TAG, "loadLinks ystream emitted=${emitted.get()}")
                 true
@@ -222,7 +231,23 @@ class JavSegarProvider : MainAPI() {
         }
     }
 
+    /**
+     * Host-name match only, no path shape. Safe to act on without risking a
+     * built-in extractor being bypassed, so it decides whether the generic
+     * loadExtractor pass is worth running at all.
+     */
+    private fun isYstreamHost(url: String): Boolean {
+        val host = url.substringAfter("://", "").substringBefore('/').substringBefore(':').lowercase()
+        return YSTREAM_HOSTS.any { host.contains(it) }
+    }
+
     companion object {
         private const val TAG = "JavSegar"
+
+        // The Byse API host rotates per video, so these are matched as
+        // substrings of the host rather than pinned domains. Deliberately does
+        // NOT include vstream.id: that one is a different provider, handled by
+        // a built-in extractor that does produce links.
+        private val YSTREAM_HOSTS = listOf("ystream", "byse", "n1mwq", "f7hyg4q")
     }
 }
