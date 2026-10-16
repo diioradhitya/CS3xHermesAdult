@@ -211,9 +211,22 @@ class JavSegarProvider : MainAPI() {
         // on device: "loadExtractor handled ystream.id, emitted=false" after
         // 16s. Matching on host name instead cannot collide like that.
         val ours = isYstreamHost(data)
-        if (!ours && loadExtractor(data, data, subtitleCallback, wrap)) {
-            Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}")
-            return true
+        if (!ours) {
+            // Collect first, emit after filtering. The generic pass can hand
+            // back the master playlist *and* every variant beside it, and
+            // retiring a link after it has been shown is not possible.
+            val collected = mutableListOf<ExtractorLink>()
+            val collect: (ExtractorLink) -> Unit = { link ->
+                emitted.set(true)
+                collected.add(link)
+            }
+            if (loadExtractor(data, data, subtitleCallback, collect)) {
+                val kept = collapseVariants(collected)
+                Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}, " +
+                    "kept ${kept.size}/${collected.size}")
+                kept.forEach(callback)
+                return true
+            }
         }
 
         // Nothing claimed it, or it is ours: treat as Byse/ystream family,
@@ -239,6 +252,48 @@ class JavSegarProvider : MainAPI() {
     private fun isYstreamHost(url: String): Boolean {
         val host = url.substringAfter("://", "").substringBefore('/').substringBefore(':').lowercase()
         return YSTREAM_HOSTS.any { host.contains(it) }
+    }
+
+    /**
+     * Keep the master playlist, drop the variants sitting beside it.
+     *
+     * For vstream.id the built-in that the fuzzy matcher hands the URL to
+     * emits the master *and* each of its variants, so one video arrives as a
+     * source per resolution plus the master on top. Captured off the device:
+     *
+     *   .../stream/EUZ9GxUt8.../master.m3u8
+     *   .../stream/EUZ9GxUt8.../index-f1-v1-a1.m3u8
+     *   .../stream/EUZ9GxUt8.../index-f2-v1-a1.m3u8
+     *
+     * This is the mirror image of the Byse case, where generateM3u8 expanded a
+     * master that we then had to collapse. Here the variants arrive already
+     * separate, so the fix is to keep the master and let ExoPlayer read the
+     * ladder -- the resolutions come back as video tracks instead of sources.
+     *
+     * Exact duplicate URLs are dropped too, and mirrors on other hosts are left
+     * alone: those are genuinely different servers, not a rendition of this one.
+     */
+    private fun collapseVariants(links: List<ExtractorLink>): List<ExtractorLink> {
+        val masterDirs = links.mapNotNull { link ->
+            val path = link.url.substringBefore('?').substringAfter("//", "")
+            val dir = path.substringBeforeLast('/', "")
+            if (path.substringAfterLast('/').startsWith("master")) dir else null
+        }.toSet()
+
+        val seen = mutableSetOf<String>()
+        return links.filter { link ->
+            val path = link.url.substringBefore('?').substringAfter("//", "")
+            val file = path.substringAfterLast('/')
+            val dir = path.substringBeforeLast('/', "")
+            val isVariantBesideMaster = file.startsWith("index-") && dir in masterDirs
+            val isNew = seen.add(link.url)
+            val keep = isNew && !isVariantBesideMaster
+            if (!keep) {
+                Log.d(TAG, "dropped ${if (isVariantBesideMaster) "variant" else "duplicate"} " +
+                    "${file.ifBlank { link.url.takeLast(40) }}")
+            }
+            keep
+        }
     }
 
     companion object {
