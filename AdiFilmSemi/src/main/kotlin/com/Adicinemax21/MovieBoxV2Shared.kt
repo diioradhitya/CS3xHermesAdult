@@ -488,6 +488,16 @@ object MovieBoxV2Shared {
                     app.get("$host$path?$query", headers = playbackHeaders(query, bearer))
                 } catch (e: Exception) {
                     Log.e(tag, "[MOVIEBOX-V2] request gagal host=$host: ${e.message}")
+                    // 407 comes from the proxy in front of us, not from
+                    // MovieBox, so every host will fail identically. Stop
+                    // instead of grinding through hosts x queries x subjects
+                    // (14 attempts, ~7s) to reach the same outcome.
+                    val msg = e.message.orEmpty()
+                    if (msg.contains("407") || msg.contains("HTTP_PROXY_AUTH")) {
+                        Log.e(tag, "[MOVIEBOX-V2] STOP: proxy jaringan menolak (407). " +
+                                "Semua host akan gagal sama -- nonaktifkan proxy/VPN lalu coba lagi.")
+                        return null
+                    }
                     continue
                 }
 

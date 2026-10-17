@@ -67,8 +67,18 @@ object AdiFilmSemiIdlix {
     // PENCOCOKAN JUDUL
     // ---------------------------------------------------------------
 
+    /**
+     * Buang tanda baca dan spasi, sisakan huruf & angka dari skrip APUN.
+     *
+     * Sebelumnya pakai `[^A-Za-z0-9]`, yang menghapus seluruh non-Latin. Judul
+     * Korea seperti "장모님의 유혹" jadi string kosong dan rank() langsung
+     * menolak, sementara "50대 묵은지 장모님의 유혹" cuma jadi "50" sehingga
+     * semua judul Korea yang kebetulan punya digit cocok satu sama lain -- bukan
+     * karena judulnya sama. Idlix katalognya berbahasa Korea, jadi ini bukan
+     * kasus tepi.
+     */
     private fun clean(s: String?): String =
-        s?.replace(Regex("[^A-Za-z0-9]"), "")?.lowercase().orEmpty()
+        s?.replace(Regex("[^\\p{L}\\p{N}]"), "")?.lowercase()?.trim().orEmpty()
 
     /**
      * Skor kemiripan judul. Semakin kecil semakin cocok, null berarti ditolak.
@@ -129,13 +139,28 @@ object AdiFilmSemiIdlix {
             // ---------- 2. SARING & URUTKAN BERDASARKAN JUDUL ----------
             val wantSeries = isSeries
             val ranked = found.values.mapNotNull { item ->
-                val itemIsSeries = (item.contentType ?: "").contains("series", true)
-                if (itemIsSeries != wantSeries) return@mapNotNull null
-                val score = rank(item.title, queries) ?: rank(item.originalTitle, queries) ?: return@mapNotNull null
+                // contentType yang kosong tidak boleh jadi alasan menolak. Idlix
+                // tidak selalu mengisinya, dan dulu apa pun yang tidak berisi
+                // kata "series" dianggap movie -- lalu kandidat kenapa ditolak
+                // tidak pernah tercatat, jadi "20 kandidat, 0 lolos" tidak
+                // bisa ditelusuri. Hanya tolak kalau tipenya eksplisit.
+                val declared = item.contentType.orEmpty()
+                if (declared.isNotBlank()) {
+                    val itemIsSeries = declared.contains("series", true)
+                    if (itemIsSeries != wantSeries) {
+                        Log.d(IDX_TAG, "[3-RANK] tolak ${item.slug} tipe='$declared'")
+                        return@mapNotNull null
+                    }
+                }
+                val score = rank(item.title, queries) ?: rank(item.originalTitle, queries) ?: run {
+                    Log.d(IDX_TAG, "[3-RANK] tolak ${item.slug} judul tidak cocok: " +
+                            "title='${item.title}' originalTitle='${item.originalTitle}'")
+                    return@mapNotNull null
+                }
                 score to item
             }.sortedBy { it.first }.take(IDX_MAX_CANDIDATES)
 
-            Log.d(IDX_TAG, "[3-RANK] lolos judul=${ranked.size} -> " +
+            Log.d(IDX_TAG, "[3-RANK] lolos judul=${ranked.size} dari ${found.size} kandidat -> " +
                     ranked.joinToString { "${it.second.slug}(skor=${it.first})" })
             if (ranked.isEmpty()) return
 
