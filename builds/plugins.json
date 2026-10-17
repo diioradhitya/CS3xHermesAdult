@@ -1,5 +1,17 @@
 [
   {
+    "internalName": "AdiFilmSemi",
+    "name": "AdiFilmSemi",
+    "description": "",
+    "iconUrl": "https://klikxxi.me/wp-content/uploads/2024/02/cropped-site-icon.png",
+    "author": "",
+    "version": 17,
+    "versionCode": 17,
+    "fileHash": "sha256-c50ea5666c4ab59498db27b220c6f7cb5d52896e74bd9ea5f53b78a3731a9326",
+    "fileSize": 192919,
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AdiFilmSemi.cs3"
+  },
+  {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
     "version": 22,
@@ -18,6 +30,30 @@
     "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
     "apiVersion": 1,
     "fileHash": "sha256-2beebebf939941520fd91a9e25b58b793740b7d32f14311dbf7701cbd9714e2d"
+  },
+  {
+    "internalName": "JavdoeProvider",
+    "name": "Javdoe",
+    "description": "Javdoe (javdoe.sh) - Indonesian adult streaming, multi-server",
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "status": 1,
+    "tvTypes": [
+      "NSFW"
+    ],
+    "iconUrl": "https://javdoe.sh/logo/javdoe.png",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavdoeProvider.cs3",
+    "version": 24,
+    "fileSize": 53735,
+    "fileHash": "sha256-68ad62c48a5d85ecef3fccf986a56ebd5450c1f142f6f0f1938f26a6c6e3982d",
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "apiVersion": 1,
+    "allowedDomains": [
+      "javdoe.sh",
+      "server.javdoe.sh"
+    ]
   },
   {
     "iconUrl": "https://javhd.com/wp-content/uploads/2024/06/javhd-logo.png",
@@ -184,30 +220,6 @@
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavStoryProvider.cs3",
     "tvTypes": [
       "NSFW"
-    ]
-  },
-  {
-    "internalName": "JavdoeProvider",
-    "name": "Javdoe",
-    "description": "Javdoe (javdoe.sh) - Indonesian adult streaming, multi-server",
-    "authors": [
-      "Dio R"
-    ],
-    "language": "id",
-    "status": 1,
-    "tvTypes": [
-      "NSFW"
-    ],
-    "iconUrl": "https://javdoe.sh/logo/javdoe.png",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavdoeProvider.cs3",
-    "version": 24,
-    "fileSize": 53735,
-    "fileHash": "sha256-68ad62c48a5d85ecef3fccf986a56ebd5450c1f142f6f0f1938f26a6c6e3982d",
-    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "apiVersion": 1,
-    "allowedDomains": [
-      "javdoe.sh",
-      "server.javdoe.sh"
     ]
   },
   {
