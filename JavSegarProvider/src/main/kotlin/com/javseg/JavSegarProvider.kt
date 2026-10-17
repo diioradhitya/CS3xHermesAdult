@@ -178,21 +178,20 @@ class JavSegarProvider : MainAPI() {
         val host = data.substringAfter("://", "").substringBefore('/').lowercase()
         Log.d(TAG, "loadLinks $data (host=$host)")
 
-        // Every branch reports whether it actually produced a link. Returning
-        // true just because a handler ran is what made a failure look like a
-        // success until Cloudstream finally rendered "no links found" with
-        // nothing in the log to explain it.
-        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
-        val wrap: (ExtractorLink) -> Unit = { link ->
-            emitted.set(true)
-            callback(link)
-        }
+        // Every branch collects rather than emitting straight away. Two reasons:
+        // returning true just because a handler ran made a failure look like a
+        // success until Cloudstream rendered "no links found" with nothing in
+        // the log, and a link that has been shown cannot be renamed or
+        // withdrawn afterwards.
+        val collected = mutableListOf<ExtractorLink>()
+        val collect: (ExtractorLink) -> Unit = { link -> collected.add(link) }
 
         // streamtape.to has no built-in extractor (CS ships .com/.net/.xyz),
         // so it is handled before the generic loadExtractor pass.
         if (host.startsWith("streamtape.")) {
-            StreamTapeToExtractor().getUrl(data, data, subtitleCallback, wrap)
-            Log.d(TAG, "loadLinks streamtape emitted=${emitted.get()}")
+            StreamTapeToExtractor().getUrl(data, data, subtitleCallback, collect)
+            Log.d(TAG, "loadLinks streamtape emitted=${collected.isNotEmpty()}")
+            collected.forEach { emit(callback, it) }
             return true
         }
 
@@ -212,19 +211,15 @@ class JavSegarProvider : MainAPI() {
         // 16s. Matching on host name instead cannot collide like that.
         val ours = isYstreamHost(data)
         if (!ours) {
-            // Collect first, emit after filtering. The generic pass can hand
-            // back the master playlist *and* every variant beside it, and
-            // retiring a link after it has been shown is not possible.
-            val collected = mutableListOf<ExtractorLink>()
-            val collect: (ExtractorLink) -> Unit = { link ->
-                emitted.set(true)
-                collected.add(link)
-            }
-            if (loadExtractor(data, data, subtitleCallback, collect)) {
-                val kept = collapseVariants(collected, host)
-                Log.d(TAG, "loadExtractor handled $host, emitted=${emitted.get()}, " +
-                    "kept ${kept.size}/${collected.size}")
-                kept.forEach(callback)
+            // The generic pass can hand back the master playlist *and* every
+            // variant beside it, so filter before anything is shown.
+            val raw = mutableListOf<ExtractorLink>()
+            val gather: (ExtractorLink) -> Unit = { link -> raw.add(link) }
+            if (loadExtractor(data, data, subtitleCallback, gather)) {
+                val kept = collapseVariants(raw, host)
+                Log.d(TAG, "loadExtractor handled $host, emitted=${raw.isNotEmpty()}, " +
+                    "kept ${kept.size}/${raw.size}")
+                kept.forEach { emit(callback, it) }
                 return true
             }
         }
@@ -233,8 +228,9 @@ class JavSegarProvider : MainAPI() {
         // matched on the embed code path so a rotated host still routes here.
         return when {
             ours || Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
-                YstreamExtractor().getUrl(data, data, subtitleCallback, wrap)
-                Log.d(TAG, "loadLinks ystream emitted=${emitted.get()}")
+                YstreamExtractor().getUrl(data, data, subtitleCallback, collect)
+                Log.d(TAG, "loadLinks ystream emitted=${collected.isNotEmpty()}")
+                collected.forEach { emit(callback, it) }
                 true
             }
             else -> {
@@ -242,6 +238,35 @@ class JavSegarProvider : MainAPI() {
                 false
             }
         }
+    }
+
+    /**
+     * Name a source after the host it actually streams from.
+     *
+     * Links came back carrying the extractor's name, so a Streamhide source and
+     * a Ystream source both read the same in the list even though they point at
+     * different servers -- and Cloudstream shows nothing else to tell them
+     * apart. The host is the part that identifies where the bytes come from.
+     *
+     * ExtractorLink.name is a val, so the link is rebuilt rather than renamed.
+     * referer, headers, quality and type all carry over untouched; only the
+     * label changes.
+     */
+    private suspend fun emit(callback: (ExtractorLink) -> Unit, link: ExtractorLink) {
+        val host = runCatching { java.net.URI(link.url).host }.getOrNull()
+        if (host.isNullOrBlank()) {
+            callback(link)
+            return
+        }
+        val renamed = newExtractorLink(link.source, host, link.url, link.type) {
+            referer = link.referer
+            headers = link.headers
+            quality = link.quality
+            extractorData = link.extractorData
+            audioTracks = link.audioTracks
+        }
+        Log.d(TAG, "source name ${link.name} -> $host")
+        callback(renamed)
     }
 
     /**
