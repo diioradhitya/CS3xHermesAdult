@@ -32,8 +32,7 @@ open class AdiFilmSemi : TmdbProvider() {
     override val useMetaLoadResponse = true
     override val hasQuickSearch = true
     override val supportedTypes = setOf(
-        TvType.Movie,
-        TvType.TvSeries,
+        TvType.NSFW,
     )
 
     /** AUTHOR : Hexated & AdiFilmSemi (Modified) */
@@ -133,7 +132,7 @@ open class AdiFilmSemi : TmdbProvider() {
         return newMovieSearchResponse(
             title ?: name ?: originalTitle ?: return null,
             Data(id = id, type = mediaType ?: type).toJson(),
-            TvType.Movie,
+            TvType.NSFW,
         ) {
             this.posterUrl = getImageUrl(posterPath)
             this.score = Score.from10(voteAverage)
@@ -256,7 +255,7 @@ open class AdiFilmSemi : TmdbProvider() {
             newTvSeriesLoadResponse(
                 title,
                 url,
-                if (isAnime) TvType.Anime else TvType.TvSeries,
+                TvType.NSFW,
                 episodes
             ) {
                 this.posterUrl = poster
@@ -277,7 +276,7 @@ open class AdiFilmSemi : TmdbProvider() {
             newMovieLoadResponse(
                 title,
                 url,
-                TvType.Movie,
+                TvType.NSFW,
                 LinkData(
                     data.id,
                     res.externalIds?.imdbId,

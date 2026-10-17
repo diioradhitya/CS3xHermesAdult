@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 // use an integer for version numbers
-version = 17
+version = 18
 
 
 cloudstream {
@@ -30,9 +30,7 @@ cloudstream {
      * */
     status = 1 // will be 3 if unspecified
     tvTypes = listOf(
-        "AsianDrama",
-        "TvSeries",
-        "Movie",
+        "NSFW",
     )
 
 
