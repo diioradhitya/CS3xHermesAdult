@@ -1,15 +1,24 @@
 [
   {
-    "internalName": "AdiFilmSemi",
-    "name": "AdiFilmSemi",
-    "description": "",
     "iconUrl": "https://klikxxi.me/wp-content/uploads/2024/02/cropped-site-icon.png",
-    "author": "",
-    "version": 17,
-    "versionCode": 17,
     "fileHash": "sha256-c50ea5666c4ab59498db27b220c6f7cb5d52896e74bd9ea5f53b78a3731a9326",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 192919,
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AdiFilmSemi.cs3"
+    "status": 1,
+    "language": "id",
+    "authors": [
+      "aldry84"
+    ],
+    "tvTypes": [
+      "AsianDrama",
+      "TvSeries",
+      "Movie"
+    ],
+    "version": 17,
+    "internalName": "AdiFilmSemi",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AdiFilmSemi.cs3",
+    "name": "AdiFilmSemi"
   },
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
