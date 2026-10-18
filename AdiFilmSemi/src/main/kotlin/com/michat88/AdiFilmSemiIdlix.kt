@@ -80,6 +80,32 @@ object AdiFilmSemiIdlix {
     private fun clean(s: String?): String =
         s?.replace(Regex("[^\\p{L}\\p{N}]"), "")?.lowercase()?.trim().orEmpty()
 
+    /** Bentuk endpoint search yang dicoba berurutan sampai ada yang mengembalikan judul cocok. */
+    private data class IdxSearchShape(val label: String, val prefix: String, val suffix: String = "") {
+        fun urlFor(query: String): String =
+            MAIN_URL + prefix + java.net.URLEncoder.encode(query, "utf-8") + suffix
+    }
+
+    private val IDX_SEARCH_SHAPES = listOf(
+        IdxSearchShape("api/search?q=", "/api/search?q="),
+        IdxSearchShape("api/search?query=", "/api/search?query="),
+        IdxSearchShape("api/search?keyword=", "/api/search?keyword="),
+        IdxSearchShape("api/search?search=", "/api/search?search="),
+        IdxSearchShape("api/search/movie?q=", "/api/search/movie?q="),
+        IdxSearchShape("api/movies?search=", "/api/movies?search=")
+    )
+
+    /**
+     * Terima tiga bentuk balasan: {"data":[...]}, {"results":[...]}, dan array polos.
+     * Bentuk terakhir dibungkus jadi {"data":...} supaya tetap lewat parser yang sama.
+     */
+    private suspend fun fetchIdxItems(url: String): List<IdxContent> {
+        val text = app.get(url).text
+        val payload = if (text.trimStart().startsWith("[")) "{\"data\":$text}" else text
+        val parsed = AppUtils.parseJson<IdxSearchResponse>(payload) ?: return emptyList()
+        return (parsed.data ?: parsed.results).orEmpty()
+    }
+
     /**
      * Skor kemiripan judul. Semakin kecil semakin cocok, null berarti ditolak.
      * Sengaja ketat: hanya sama persis atau containment yang proporsional.
@@ -123,17 +149,35 @@ object AdiFilmSemiIdlix {
             Log.d(IDX_TAG, "[1-MULAI] title=$title org=$orgTitle alt=$altTitle year=$year s=$season e=$episode")
 
             // ---------- 1. SEARCH ----------
+            // Endpoint lama /api/search?q= ternyata mengembalikan daftar film
+            // populer apa pun query-nya: untuk judul Korea "50대 묵은지 장모님의
+            // 유혹" yang balik 20 entri Stranger Things, Hereditary, X-Men,
+            // Shutter Island. Jadi satu endpoint tidak bisa dipercaya. Probe
+            // beberapa bentuk, lalu pakai yang benar-benar memuat judul cocok.
+            val activeQuery = queries.first()
+            var chosen: IdxSearchShape? = null
+
+            for (shape in IDX_SEARCH_SHAPES) {
+                val items = runCatching { fetchIdxItems(shape.urlFor(activeQuery)) }.getOrNull()
+                val relevant = items?.count { item ->
+                    rank(item.title, queries) != null || rank(item.originalTitle, queries) != null
+                } ?: -1
+                Log.d(IDX_TAG, "[2-PROBE] ${shape.label} item=${items?.size ?: -1} cocok=$relevant")
+                if (relevant > 0) { chosen = shape; break }
+            }
+
+            val shape = chosen ?: IDX_SEARCH_SHAPES.first().also {
+                Log.d(IDX_TAG, "[2-PROBE] tidak ada yang mengembalikan judul cocok, pakai ${it.label}")
+            }
+
             val found = LinkedHashMap<String, IdxContent>()
             for (q in queries) {
-                val encoded = java.net.URLEncoder.encode(q, "utf-8")
-                val text = runCatching { app.get("$MAIN_URL/api/search?q=$encoded").text }.getOrNull() ?: continue
-                val parsed = runCatching { AppUtils.parseJson<IdxSearchResponse>(text) }.getOrNull() ?: continue
-                (parsed.data ?: parsed.results).orEmpty().forEach { item ->
+                runCatching { fetchIdxItems(shape.urlFor(q)) }.getOrNull().orEmpty().forEach { item ->
                     val slug = item.slug ?: return@forEach
                     if (!found.containsKey(slug)) found[slug] = item
                 }
             }
-            Log.d(IDX_TAG, "[2-SEARCH] kandidat mentah=${found.size}")
+            Log.d(IDX_TAG, "[2-SEARCH] kandidat mentah=${found.size} lewat ${shape.label}")
             if (found.isEmpty()) return
 
             // ---------- 2. SARING & URUTKAN BERDASARKAN JUDUL ----------
