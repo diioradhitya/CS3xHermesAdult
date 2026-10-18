@@ -54,6 +54,9 @@ object AdiFilmSemiIdlix {
 
     private const val MAIN_URL = "https://z2.idlixku.com"
 
+    /** Jeda antar request ke host di balik Cloudflare. */
+    private const val PROBE_GAP_MS = 1500L
+
     // Mengikuti implementasi Idlix asli: batas tunggu time-lock 30 detik.
     private const val MAX_DELAY_MS = 30_000L
 
@@ -95,15 +98,36 @@ object AdiFilmSemiIdlix {
         IdxSearchShape("api/movies?search=", "/api/movies?search=")
     )
 
+    /** Hasil satu permintaan, lengkap dengan status dan cuplikan body supaya kegagalan bisa dibaca. */
+    private data class IdxFetch(
+        val code: Int,
+        val items: List<IdxContent>,
+        val sample: String,
+        val error: String? = null
+    )
+
     /**
      * Terima tiga bentuk balasan: {"data":[...]}, {"results":[...]}, dan array polos.
      * Bentuk terakhir dibungkus jadi {"data":...} supaya tetap lewat parser yang sama.
+     *
+     * app.get tidak melempar exception untuk status seperti 403, jadi status dan
+     * body apa adanya ikut dikembalikan. Tanpa itu, "item=0" tidak bisa dibedakan
+     * antara "tidak ada hasil" dan "Cloudflare balasan halaman tantang".
      */
-    private suspend fun fetchIdxItems(url: String): List<IdxContent> {
-        val text = app.get(url).text
-        val payload = if (text.trimStart().startsWith("[")) "{\"data\":$text}" else text
-        val parsed = AppUtils.parseJson<IdxSearchResponse>(payload) ?: return emptyList()
-        return (parsed.data ?: parsed.results).orEmpty()
+    private suspend fun fetchIdx(url: String): IdxFetch {
+        return try {
+            val response = app.get(url)
+            val text = response.text
+            val payload = if (text.trimStart().startsWith("[")) "{\"data\":$text}" else text
+            val parsed = AppUtils.parseJson<IdxSearchResponse>(payload)
+            IdxFetch(
+                code = response.okhttpResponse.code,
+                items = (parsed?.data ?: parsed?.results).orEmpty(),
+                sample = text.take(110).replace(Regex("\\s+"), " ")
+            )
+        } catch (error: Exception) {
+            IdxFetch(-1, emptyList(), "", "${error.javaClass.simpleName}: ${error.message}")
+        }
     }
 
     /**
@@ -158,12 +182,21 @@ object AdiFilmSemiIdlix {
             var chosen: IdxSearchShape? = null
 
             for (shape in IDX_SEARCH_SHAPES) {
-                val items = runCatching { fetchIdxItems(shape.urlFor(activeQuery)) }.getOrNull()
-                val relevant = items?.count { item ->
+                val fetch = fetchIdx(shape.urlFor(activeQuery))
+                val relevant = fetch.items.count { item ->
                     rank(item.title, queries) != null || rank(item.originalTitle, queries) != null
-                } ?: -1
-                Log.d(IDX_TAG, "[2-PROBE] ${shape.label} item=${items?.size ?: -1} cocok=$relevant")
+                }
+                Log.d(
+                    IDX_TAG,
+                    "[2-PROBE] ${shape.label} http=${fetch.code} item=${fetch.items.size} " +
+                        "cocok=$relevant :: ${fetch.sample.ifBlank { fetch.error.orEmpty() }}"
+                )
                 if (relevant > 0) { chosen = shape; break }
+                // Enam permintaan dalam 1,4 detik membuat Cloudflare membalas
+                // halaman tantang: probe keenam semuanya item=0, tapi pencarian
+                // dengan endpoint yang sama 1,3 detik kemudian dapat 20 item.
+                // Satu request berurutan selalu lolos, jadi beri jeda.
+                delay(PROBE_GAP_MS)
             }
 
             val shape = chosen ?: IDX_SEARCH_SHAPES.first().also {
@@ -172,7 +205,8 @@ object AdiFilmSemiIdlix {
 
             val found = LinkedHashMap<String, IdxContent>()
             for (q in queries) {
-                runCatching { fetchIdxItems(shape.urlFor(q)) }.getOrNull().orEmpty().forEach { item ->
+                delay(PROBE_GAP_MS)
+                fetchIdx(shape.urlFor(q)).items.forEach { item ->
                     val slug = item.slug ?: return@forEach
                     if (!found.containsKey(slug)) found[slug] = item
                 }
