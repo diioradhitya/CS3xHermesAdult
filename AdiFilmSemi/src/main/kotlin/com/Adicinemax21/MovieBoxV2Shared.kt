@@ -36,10 +36,17 @@ import kotlin.math.abs
  *
  * Scope is intentionally MovieBox-only. Metadata, Idlix, VidSrc and each host
  * provider remain owned by their original implementation.
+ *
+ * Playback memakai BFF milik aplikasi MovieBox TV (`tv.aoneroom.com`). BFF TV
+ * melayani stream asli untuk tamu, sedangkan BFF mobile selalu menukar
+ * resourceLink dengan klip pemberitahuan 23 detik ("/other/2026/...") selama
+ * akun bukan VIP. Pencarian tetap lewat BFF mobile karena indeks BFF TV tidak
+ * memuat judul dewasa.
  */
 object MovieBoxV2Shared {
+    private const val TV_URL = "https://tv.aoneroom.com"
     private const val API_URL = "https://api3.aoneroom.com"
-    private const val API_FALLBACK = "https://api4sg.aoneroom.com"
+    private const val API_FALLBACK = "https://api4.aoneroom.com"
     private const val USER_AGENT =
         "com.community.oneroom/50020088 (Linux; U; Android 13; en_US; Samsung; Build/TQ3A.230901.001)"
 
@@ -70,10 +77,23 @@ object MovieBoxV2Shared {
         val format: String?
     )
 
-    private data class PlaybackResult(
-        val streams: List<Stream>,
-        val bearer: String
+    private data class Resource(
+        val url: String,
+        val resolution: Int?,
+        val codec: String?
     )
+
+    private data class Playback(
+        val streams: List<Stream>,
+        val resources: List<Resource>
+    ) {
+        val hasContent: Boolean get() = streams.isNotEmpty() || resources.isNotEmpty()
+    }
+
+    private data class Season(val se: Int, val maxEp: Int)
+
+    /** Jaringan putus ke host BFF TV; percobaan berikutnya pasti gagal juga. */
+    private class TvUnreachable(cause: Throwable) : Exception(cause)
 
     fun attachContext(context: Context) {
         appContext = context.applicationContext
@@ -139,20 +159,19 @@ object MovieBoxV2Shared {
             .put("sp_code", "")
             .toString()
 
-    private fun playbackClientInfo(): String =
+    /** Identitas klien MovieBox TV, dipakai untuk seluruh panggilan BFF TV. */
+    private fun tvClientInfo(): String =
         JSONObject()
-            .put("package_name", "com.community.oneroom")
-            .put("version_name", "4.0.03.0922.03")
-            .put("version_code", 50020131L)
+            .put("package_name", "com.community.mbox.tv")
+            .put("version_name", "1.1.6.0723.03")
+            .put("version_code", 101060723)
             .put("os", "android")
-            .put("os_version", Build.VERSION.RELEASE ?: "")
+            .put("os_version", Build.VERSION.RELEASE ?: "11")
             .put("device_id", deviceId())
             .put("install_store", "ps")
-            .put("brand", Build.BRAND ?: "")
-            .put("model", Build.MODEL ?: "")
             .put("system_language", java.util.Locale.getDefault().language)
-            .put("net", "NETWORK_WIFI")
-            .put("region", java.util.Locale.getDefault().country)
+            .put("net", "NETWORK_ETHERNET")
+            .put("region", "US")
             .put("timezone", java.util.TimeZone.getDefault().id)
             .put("sp_code", "")
             .toString()
@@ -190,19 +209,23 @@ object MovieBoxV2Shared {
         body: String = ""
     ): String = sign(normalCanonical(method, pathWithQuery, ts, body), ts)
 
-    private fun playbackSignature(pathWithCanonicalQuery: String, ts: String): String =
-        sign(
-            listOf("GET", "", "", "", ts, "", pathWithCanonicalQuery)
-                .joinToString("\n"),
-            ts
-        )
-
     private fun guestToken(ts: String): String = "$ts,${md5(ts.reversed())}"
 
-    private fun normalHeaders(
+    /**
+     * Query string selalu diurutkan per key: gateway memakai bentuk yang sama
+     * saat menghitung signature, jadi urutan di URL dan di canonical harus
+     * identik.
+     */
+    private fun query(vararg params: Pair<String, String>): String =
+        params.sortedBy { it.first }
+            .joinToString("&") { "${it.first}=${it.second}" }
+
+    private fun headers(
         ts: String,
         signature: String,
-        bearer: String?
+        bearer: String?,
+        status: String,
+        clientInfo: String
     ): Map<String, String> {
         val out = mutableMapOf(
             "user-agent" to USER_AGENT,
@@ -210,24 +233,102 @@ object MovieBoxV2Shared {
             "content-type" to "application/json",
             "x-client-token" to guestToken(ts),
             "x-tr-signature" to signature,
-            "x-client-info" to catalogClientInfo(),
-            "x-client-status" to "0"
+            "x-client-info" to clientInfo,
+            "x-client-status" to status
         )
         if (!bearer.isNullOrBlank()) out["authorization"] = "Bearer $bearer"
         return out
     }
 
+    private suspend fun call(
+        url: String,
+        method: String,
+        target: String,
+        body: String?,
+        bearer: String?,
+        status: String,
+        clientInfo: String,
+        tag: String
+    ): String? {
+        val ts = System.currentTimeMillis().toString()
+        val signed = headers(
+            ts,
+            normalSignature(method, target, ts, body.orEmpty()),
+            bearer,
+            status,
+            clientInfo
+        )
+        return try {
+            val response = if (method == "POST") {
+                app.post(
+                    "$url$target",
+                    headers = signed,
+                    requestBody = (body ?: "").toByteArray(Charsets.UTF_8)
+                        .toRequestBody("application/json".toMediaTypeOrNull())
+                )
+            } else {
+                app.get("$url$target", headers = signed)
+            }
+            if (response.code == 200) {
+                response.text
+            } else {
+                Log.w(tag, "[MOVIEBOX-TV] http=${response.code} $target")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "[MOVIEBOX-TV] request gagal $target: ${e.message}")
+            throw TvUnreachable(e)
+        }
+    }
+
+    /** Panggilan BFF TV (tamu: X-Client-Status 1, tanpa Authorization). */
+    private suspend fun tvGet(path: String, q: String?, tag: String): String? =
+        call(
+            TV_URL,
+            "GET",
+            if (q.isNullOrBlank()) path else "$path?$q",
+            null,
+            null,
+            "1",
+            tvClientInfo(),
+            tag
+        )
+
+    /** Panggilan BFF mobile; hanya dipakai untuk pencarian (butuh bearer). */
+    private suspend fun apiPost(path: String, body: String, bearer: String, tag: String): String? {
+        for (host in listOf(API_URL, API_FALLBACK)) {
+            val raw = try {
+                call(
+                    host,
+                    "POST",
+                    path,
+                    body,
+                    bearer,
+                    "0",
+                    catalogClientInfo(),
+                    tag
+                )
+            } catch (_: TvUnreachable) {
+                continue
+            }
+            if (raw != null) return raw
+        }
+        return null
+    }
+
     private suspend fun getBearer(): String? {
         val ts = System.currentTimeMillis().toString()
         val path = "/wefeed-mobile-bff/tab/ranking-list"
-        val query = "page=1&perPage=1&tabId=0"
+        val q = query("page" to "1", "perPage" to "1", "tabId" to "0")
         return try {
             val response = app.get(
-                "$API_URL$path?$query",
-                headers = normalHeaders(
+                "$API_URL$path?$q",
+                headers = headers(
                     ts,
-                    normalSignature("GET", "$path?$query", ts),
-                    null
+                    normalSignature("GET", "$path?$q", ts),
+                    null,
+                    "1",
+                    catalogClientInfo()
                 )
             )
             val raw = response.headers["x-user"] ?: return null
@@ -238,68 +339,32 @@ object MovieBoxV2Shared {
         }
     }
 
-    private suspend fun getSigned(path: String, query: String, bearer: String?): String? {
-        val ts = System.currentTimeMillis().toString()
-        val target = if (query.isBlank()) path else "$path?$query"
-        return try {
-            val response = app.get(
-                "$API_URL$target",
-                headers = normalHeaders(
-                    ts,
-                    normalSignature("GET", target, ts),
-                    bearer
-                )
-            )
-            if (response.code == 200) response.text else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private suspend fun postSigned(path: String, body: String, bearer: String?): String? {
-        val ts = System.currentTimeMillis().toString()
-        return try {
-            val response = app.post(
-                "$API_URL$path",
-                headers = normalHeaders(
-                    ts,
-                    normalSignature("POST", path, ts, body),
-                    bearer
-                ),
-                requestBody = body.toByteArray(Charsets.UTF_8)
-                    .toRequestBody("application/json".toMediaTypeOrNull())
-            )
-            if (response.code == 200) response.text else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     private fun normalizeTitle(value: String): String =
         value.replace(Regex("[^A-Za-z0-9]"), "").lowercase()
 
+    /** Tipe katalog MovieBox: 1 = film, 2 = seri, 7 = film pendek. */
+    private fun typeMatches(actual: Int?, wanted: Int): Boolean =
+        actual == wanted || (wanted == 1 && actual == 7)
+
     private suspend fun searchSubjects(
-        query: String,
+        queryText: String,
         matchYear: Int?,
         wantedType: Int,
         bearer: String,
         tag: String
     ): List<Subject> {
-        val normalized = normalizeTitle(query)
+        val normalized = normalizeTitle(queryText)
         if (normalized.isBlank()) return emptyList()
 
         val body = JSONObject()
             .put("page", 1)
             .put("perPage", 10)
-            .put("keyword", query)
+            .put("keyword", queryText)
             .put("tabId", "")
             .toString()
 
-        val raw = postSigned(
-            "/wefeed-mobile-bff/subject-api/search/v2",
-            body,
-            bearer
-        ) ?: return emptyList()
+        val raw = apiPost("/wefeed-mobile-bff/subject-api/search/v2", body, bearer, tag)
+            ?: return emptyList()
 
         return try {
             val results = JSONObject(raw)
@@ -321,9 +386,9 @@ object MovieBoxV2Shared {
                 }
             }
 
-            val ranked = mutableListOf<Pair<Int, Subject>>()
+            val ranked = mutableListOf<Triple<Int, Boolean, Subject>>()
             for (subject in all) {
-                if (subject.type != null && subject.type != wantedType) continue
+                if (subject.type != null && !typeMatches(subject.type, wantedType)) continue
                 val cleanTitle = normalizeTitle(subject.title)
                 if (cleanTitle.isBlank()) continue
                 val rank = when {
@@ -344,25 +409,30 @@ object MovieBoxV2Shared {
                     wantedType == 2 -> subjectYear >= matchYear - 1
                     else -> abs(subjectYear - matchYear) <= 1
                 }
-                if (!yearOk) continue
-                ranked += rank to subject
+                ranked += Triple(rank, yearOk, subject)
             }
 
-            val strong = ranked.filter { it.first <= 2 }
-            (if (strong.isNotEmpty()) strong else ranked)
-                .sortedBy { it.first }
-                .map { it.second }
+            // Tahun rilis MovieBox sering tidak sama dengan tahun TMDB
+            // (contoh: An Affair: My Friend's Mom tertulis 2017 padahal TMDB
+            // 2022). Tahun hanya dipakai sebagai preferensi, bukan syarat mutlak,
+            // supaya judul yang tepat tidak ikut terbuang.
+            val strongPool = ranked.filter { it.first <= 2 }
+            val pool = strongPool.ifEmpty { ranked }
+            val surePool = pool.filter { it.second }
+            val chosen = surePool.ifEmpty { pool }
+            chosen.sortedWith(compareBy({ it.first }, { if (it.second) 0 else 1 }))
+                .map { it.third }
         } catch (e: Exception) {
-            Log.e(tag, "[MOVIEBOX-V2] search parse gagal: ${e.message}")
+            Log.e(tag, "[MOVIEBOX-TV] search parse gagal: ${e.message}")
             emptyList()
         }
     }
 
-    private suspend fun seasons(subjectId: String, bearer: String): List<Int> {
-        val raw = getSigned(
-            "/wefeed-mobile-bff/subject-api/season-info",
-            "subjectId=$subjectId",
-            bearer
+    private suspend fun tvSeasons(subjectId: String, tag: String): List<Season> {
+        val raw = tvGet(
+            "/wefeed-tv-bff/subject/season-info",
+            query("subjectId" to subjectId),
+            tag
         ) ?: return emptyList()
         return try {
             val array = JSONObject(raw)
@@ -371,30 +441,42 @@ object MovieBoxV2Shared {
             buildList {
                 for (i in 0 until (array?.length() ?: 0)) {
                     val item = array!!.optJSONObject(i) ?: continue
-                    if (item.has("se")) add(item.optInt("se"))
+                    if (!item.has("se")) continue
+                    add(Season(item.optInt("se"), item.optInt("maxEp", 0)))
                 }
-            }.distinct().sorted()
+            }.distinctBy { it.se }.sortedBy { it.se }
         } catch (_: Exception) {
             emptyList()
         }
     }
 
-    private fun canonicalQuery(query: String): String =
-        query.split("&")
-            .filter { it.isNotBlank() }
-            .sortedBy { it.substringBefore('=') }
-            .joinToString("&")
+    /**
+     * Pasangan se/ep yang patut dicoba. Film memakai se=0&ep=0; film pendek
+     * (tipe 7) dan seri selalu punya daftar season walau hanya satu episode.
+     */
+    private fun probePairs(seasons: List<Season>, season: Int?, episode: Int?): List<Pair<Int, Int>> {
+        val wantedEp = (episode ?: 1).coerceAtLeast(1)
+        if (season == null) {
+            // Film memakai se=0&ep=0. Sebagian entri film tetap melaporkan
+            // daftar season (se=0 maxEp=0) atau satu episode (film pendek,
+            // tipe 7: se=1 maxEp=1), jadi (0,0) dicoba lebih dulu.
+            val fromSeason = seasons.firstOrNull()?.let { item ->
+                item.se to (if (item.maxEp > 0) wantedEp.coerceAtMost(item.maxEp) else 0)
+            }
+            return listOfNotNull(0 to 0, fromSeason).distinct()
+        }
 
-    private fun playbackHeaders(query: String, bearer: String): Map<String, String> {
-        val ts = System.currentTimeMillis().toString()
-        val path = "/wefeed-mobile-bff/subject-api/play-info/v2"
-        val signature = playbackSignature("$path?${canonicalQuery(query)}", ts)
-        return mapOf(
-            "authorization" to "Bearer $bearer",
-            "x-tr-signature" to signature,
-            "x-client-info" to playbackClientInfo(),
-            "x-client-status" to "1"
-        )
+        val exact = seasons.firstOrNull { it.se == season }
+        if (exact != null) {
+            val ep = if (exact.maxEp > 0) wantedEp.coerceAtMost(exact.maxEp) else wantedEp
+            return listOf(exact.se to ep, exact.se to 1, exact.se to 0).distinct()
+        }
+
+        return buildList {
+            add(season to wantedEp)
+            seasons.firstOrNull()?.let { add(it.se to wantedEp) }
+            add(0 to 0)
+        }.distinct()
     }
 
     private fun noticeUrl(url: String): Boolean {
@@ -402,156 +484,104 @@ object MovieBoxV2Shared {
         return lower.contains("b164fbfb4347792950bdfbfb563d39d9") ||
             lower.contains("1c7de0bd3393702d9191801f15f88f8d") ||
             lower.contains("9a0461bc39da389663bf3dbb17091d3f") ||
-            lower.contains("/other/2026/09/") ||
+            lower.contains("/other/2026/") ||
+            lower.contains("/other/") ||
             lower.contains("/notice.mp4") ||
             lower.contains("upgrade-notice")
     }
 
-    private fun edgeManifest(cookie: String): String? {
-        val encoded = Regex(
-            """Edge-Cache-Cookie=urlprefix=([^:;\s]+)""",
-            RegexOption.IGNORE_CASE
-        ).find(cookie)?.groupValues?.getOrNull(1) ?: return null
-        return try {
-            val normalized = encoded.replace('_', '/').replace('-', '+') +
-                "=".repeat((4 - encoded.length % 4) % 4)
-            val prefix = String(Base64.decode(normalized, Base64.DEFAULT), Charsets.UTF_8)
-                .trimEnd('/')
-            if (prefix.endsWith(".mpd", true) || prefix.endsWith(".m3u8", true)) {
-                prefix
-            } else {
-                "$prefix/index.mpd"
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun cloudFrontManifest(cookie: String): String? {
-        val encoded = Regex(
-            """CloudFront-Policy=([^;]+)""",
-            RegexOption.IGNORE_CASE
-        ).find(cookie)?.groupValues?.getOrNull(1) ?: return null
-        return try {
-            val normalized = encoded
-                .replace('-', '+')
-                .replace('~', '/')
-                .replace('_', '=') +
-                "=".repeat((4 - encoded.length % 4) % 4)
-            val json = String(Base64.decode(normalized, Base64.DEFAULT), Charsets.UTF_8)
-            val resource = JSONObject(json)
-                .optJSONArray("Statement")
-                ?.optJSONObject(0)
-                ?.optString("Resource")
-                ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-                ?: return null
-            val base = resource.trimEnd('*').trimEnd('/')
-            if (base.endsWith(".mpd", true) || base.endsWith(".m3u8", true)) {
-                base
-            } else {
-                "$base/index.mpd"
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun resolvedUrl(url: String, cookie: String?): String? {
-        val resolved = if (cookie.isNullOrBlank()) {
-            url
-        } else {
-            edgeManifest(cookie) ?: cloudFrontManifest(cookie) ?: url
-        }
-        return resolved.takeUnless(::noticeUrl)
-    }
-
-    private suspend fun playInfo(
+    private suspend fun tvPlayInfo(
         subjectId: String,
         se: Int,
         ep: Int,
-        initialBearer: String,
         tag: String
-    ): PlaybackResult? {
-        var bearer = initialBearer
-        val path = "/wefeed-mobile-bff/subject-api/play-info/v2"
-        val queries = listOf(
-            "subjectId=$subjectId&se=$se&ep=$ep",
-            "subjectId=$subjectId&se=$se&ep=$ep" +
-                "&streamSignType=1" +
-                "&supportCodecs%5Bhevc%5D=1" +
-                "&supportCodecs%5Bh264%5D=1"
-        )
+    ): Playback? {
+        val raw = tvGet(
+            "/wefeed-tv-bff/subject/play-info",
+            query(
+                "subjectId" to subjectId,
+                "se" to se.toString(),
+                "ep" to ep.toString()
+            ),
+            tag
+        ) ?: return null
 
-        for (host in listOf(API_URL, API_FALLBACK)) {
-            for (query in queries) {
-                var response = try {
-                    app.get("$host$path?$query", headers = playbackHeaders(query, bearer))
-                } catch (e: Exception) {
-                    Log.e(tag, "[MOVIEBOX-V2] request gagal host=$host: ${e.message}")
-                    // 407 comes from the proxy in front of us, not from
-                    // MovieBox, so every host will fail identically. Stop
-                    // instead of grinding through hosts x queries x subjects
-                    // (14 attempts, ~7s) to reach the same outcome.
-                    val msg = e.message.orEmpty()
-                    if (msg.contains("407") || msg.contains("HTTP_PROXY_AUTH")) {
-                        Log.e(tag, "[MOVIEBOX-V2] STOP: proxy jaringan menolak (407). " +
-                                "Semua host akan gagal sama -- nonaktifkan proxy/VPN lalu coba lagi.")
-                        return null
-                    }
-                    continue
-                }
+        return try {
+            val root = JSONObject(raw)
+            if (root.has("code") && root.optInt("code", 0) != 0) return null
+            val data = root.optJSONObject("data") ?: return null
 
-                if (response.code == 401 || response.code == 441) {
-                    val refreshed = getBearer()
-                    if (!refreshed.isNullOrBlank()) {
-                        bearer = refreshed
-                        response = try {
-                            app.get("$host$path?$query", headers = playbackHeaders(query, bearer))
-                        } catch (_: Exception) {
-                            continue
-                        }
-                    }
-                }
-                if (response.code != 200) continue
-
-                val parsed = try {
-                    val root = JSONObject(response.text)
-                    if (root.has("code") && root.optInt("code", 0) != 0) continue
-                    val data = root.optJSONObject("data") ?: continue
-                    val dataCookie = data.optString("signCookie", "").takeIf { it.isNotBlank() }
-                    val array = data.optJSONArray("streams") ?: continue
-                    buildList {
-                        for (i in 0 until array.length()) {
-                            val item = array.optJSONObject(i) ?: continue
-                            val rawUrl = item.optString("url", "")
-                            if (rawUrl.isBlank()) continue
-                            val cookie = item.optString("signCookie", "")
-                                .takeIf { it.isNotBlank() }
-                                ?: dataCookie
-                            val url = resolvedUrl(rawUrl, cookie) ?: continue
-                            add(
-                                Stream(
-                                    id = item.optString("id", "").takeIf { it.isNotBlank() },
-                                    url = url,
-                                    cookie = cookie,
-                                    resolutions = item.optString("resolutions", "").takeIf { it.isNotBlank() },
-                                    codec = item.optString("codecName", "").takeIf { it.isNotBlank() },
-                                    format = item.optString("format", "").takeIf { it.isNotBlank() }
-                                )
-                            )
-                        }
-                    }
-                } catch (_: Exception) {
-                    emptyList()
-                }
-
-                if (parsed.isNotEmpty()) {
-                    Log.d(tag, "[MOVIEBOX-V2] subject=$subjectId se=$se ep=$ep streams=${parsed.size}")
-                    return PlaybackResult(parsed.distinctBy { it.url }, bearer)
+            val streams = buildList {
+                val array = data.optJSONArray("streams")
+                for (i in 0 until (array?.length() ?: 0)) {
+                    val item = array!!.optJSONObject(i) ?: continue
+                    val url = item.optString("url", "")
+                    if (url.isBlank() || noticeUrl(url)) continue
+                    add(
+                        Stream(
+                            id = item.optString("id", "").takeIf { it.isNotBlank() },
+                            url = url,
+                            cookie = item.optString("signCookie", "").takeIf { it.isNotBlank() },
+                            resolutions = item.optString("resolutions", "").takeIf { it.isNotBlank() },
+                            codec = item.optString("codecName", "").takeIf { it.isNotBlank() },
+                            format = item.optString("format", "").takeIf { it.isNotBlank() }
+                        )
+                    )
                 }
             }
+
+            val resources = buildList {
+                val array = data.optJSONArray("resources")
+                for (i in 0 until (array?.length() ?: 0)) {
+                    val item = array!!.optJSONObject(i) ?: continue
+                    val url = item.optString("url", "")
+                    if (url.isBlank() || noticeUrl(url)) continue
+                    add(
+                        Resource(
+                            url = url,
+                            resolution = Regex("""\d{3,4}""")
+                                .find(item.optString("resolution", ""))
+                                ?.value?.toIntOrNull(),
+                            codec = item.optString("codec", "").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+
+            Playback(streams.distinctBy { it.url }, resources.distinctBy { it.url })
+        } catch (_: Exception) {
+            null
         }
-        return null
+    }
+
+    private suspend fun subtitles(
+        subjectId: String,
+        streamId: String?,
+        tag: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        if (streamId.isNullOrBlank()) return
+        val raw = tvGet(
+            "/wefeed-tv-bff/subject/stream-captions",
+            query("subjectId" to subjectId, "streamId" to streamId),
+            tag
+        ) ?: return
+        try {
+            val data = JSONObject(raw).optJSONObject("data") ?: return
+            val array = data.optJSONArray("captions") ?: data.optJSONArray("extCaptions")
+            for (i in 0 until (array?.length() ?: 0)) {
+                val item = array!!.optJSONObject(i) ?: continue
+                val url = item.optString("url", "")
+                if (url.isBlank()) continue
+                val label = item.optString("lanName", "").ifBlank {
+                    item.optString("lan", "").ifBlank {
+                        item.optString("language", "").ifBlank { "Unknown" }
+                    }
+                }
+                subtitleCallback(newSubtitleFile(label, url))
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun linkType(stream: Stream): ExtractorLinkType {
@@ -563,39 +593,69 @@ object MovieBoxV2Shared {
         }
     }
 
-    private fun quality(stream: Stream): Int =
+    private fun maxQuality(resolutions: String?, fallback: Int = 1080): Int =
         Regex("""\d{3,4}""")
-            .findAll(stream.resolutions.orEmpty())
+            .findAll(resolutions.orEmpty())
             .mapNotNull { it.value.toIntOrNull() }
             .filter { it in 144..4320 }
-            .maxOrNull() ?: 1080
+            .maxOrNull() ?: fallback
 
-    private suspend fun subtitles(
-        subjectId: String,
-        streamId: String?,
-        bearer: String,
-        subtitleCallback: (SubtitleFile) -> Unit
-    ) {
-        if (streamId.isNullOrBlank()) return
-        val raw = getSigned(
-            "/wefeed-mobile-bff/subject-api/get-stream-captions",
-            "streamId=$streamId&subjectId=$subjectId",
-            bearer
-        ) ?: return
-        try {
-            val array = JSONObject(raw)
-                .optJSONObject("data")
-                ?.optJSONArray("extCaptions")
-            for (i in 0 until (array?.length() ?: 0)) {
-                val item = array!!.optJSONObject(i) ?: continue
-                val url = item.optString("url", "")
-                if (url.isBlank()) continue
-                val label = item.optString("lanName", "").ifBlank {
-                    item.optString("lan", "").ifBlank { "Unknown" }
+    private suspend fun emit(playback: Playback, tag: String, callback: (ExtractorLink) -> Unit) {
+        val stream = playback.streams.firstOrNull()
+        if (stream != null) {
+            // Satu link saja: resolusi DASH muncul sebagai video track ExoPlayer,
+            // jadi link terpisah per resolusi hanya akan menduplikasi.
+            val q = maxQuality(stream.resolutions)
+            val headers = mutableMapOf(
+                "Referer" to "$TV_URL/",
+                "User-Agent" to USER_AGENT
+            )
+            stream.cookie?.let { headers["Cookie"] = it }
+            Log.d(
+                tag,
+                "[MOVIEBOX-TV] DASH quality=${q}p codec=${stream.codec} " +
+                    "cookie=${!stream.cookie.isNullOrBlank()}"
+            )
+            callback(
+                newExtractorLink(
+                    source = "MovieBox",
+                    name = "MovieBox ${q}p",
+                    url = stream.url,
+                    type = linkType(stream)
+                ) {
+                    quality = q
+                    this.headers = headers
                 }
-                subtitleCallback(newSubtitleFile(label, url))
-            }
-        } catch (_: Exception) {
+            )
+            return
+        }
+
+        // Fallback: hanya bila DASH tidak tersedia. Satu link per resolusi,
+        // h264 diutamakan saat resolusi sama.
+        val mp4 = playback.resources
+            .sortedWith(
+                compareByDescending<Resource> { it.resolution ?: 0 }
+                    .thenBy { if (it.codec.equals("h264", true)) 0 else 1 }
+            )
+            .distinctBy { it.resolution }
+            .take(3)
+        Log.d(tag, "[MOVIEBOX-TV] fallback MP4 sebanyak ${mp4.size} resolusi")
+        for (item in mp4) {
+            val q = item.resolution ?: 1080
+            callback(
+                newExtractorLink(
+                    source = "MovieBox",
+                    name = "MovieBox ${q}p",
+                    url = item.url,
+                    type = ExtractorLinkType.VIDEO
+                ) {
+                    quality = q
+                    this.headers = mapOf(
+                        "Referer" to "$TV_URL/",
+                        "User-Agent" to USER_AGENT
+                    )
+                }
+            )
         }
     }
 
@@ -613,8 +673,8 @@ object MovieBoxV2Shared {
     ) {
         val matchYear = if (season != null) (airedYear ?: year) else year
         val wantedType = if (season != null) 2 else 1
-        var bearer = getBearer() ?: run {
-            Log.e(sourceTag, "[MOVIEBOX-V2] bearer token null")
+        val bearer = getBearer() ?: run {
+            Log.e(sourceTag, "[MOVIEBOX-TV] bearer token null (ranking-list gagal)")
             return
         }
 
@@ -628,102 +688,61 @@ object MovieBoxV2Shared {
         ).map { it.trim() }.filter { it.isNotBlank() }.distinct()
 
         var candidates = emptyList<Subject>()
-        for (query in queries) {
-            candidates = searchSubjects(query, matchYear, wantedType, bearer, sourceTag)
+        for (queryText in queries) {
+            candidates = searchSubjects(queryText, matchYear, wantedType, bearer, sourceTag)
             if (candidates.isNotEmpty()) break
         }
-        if (candidates.isEmpty()) return
+        if (candidates.isEmpty()) {
+            Log.w(sourceTag, "[MOVIEBOX-TV] tidak ada subject untuk '$title'")
+            return
+        }
 
         val pool = candidates.take(if (season == null) MAX_SUBJECTS_MOVIE else MAX_SUBJECTS_TV)
+        var playback: Playback? = null
         var chosenId: String? = null
-        var result: PlaybackResult? = null
-        val wantedEpisode = episode ?: 1
 
-        if (season == null) {
-            val pairs = listOf(0 to 0, 1 to 0, 1 to 1, 0 to 1)
+        try {
             loop@ for (subject in pool) {
-                for ((se, ep) in pairs) {
-                    val current = playInfo(subject.id, se, ep, bearer, sourceTag)
-                    if (current != null) {
+                val seasons = tvSeasons(subject.id, sourceTag)
+                for ((se, ep) in probePairs(seasons, season, episode)) {
+                    val current = tvPlayInfo(subject.id, se, ep, sourceTag)
+                    if (current != null && current.hasContent) {
                         chosenId = subject.id
-                        result = current
-                        bearer = current.bearer
+                        playback = current
+                        Log.d(
+                            sourceTag,
+                            "[MOVIEBOX-TV] subject=${subject.id} se=$se ep=$ep " +
+                                "streams=${current.streams.size} mp4=${current.resources.size}"
+                        )
                         break@loop
                     }
                 }
             }
-        } else {
-            val unknown = mutableListOf<Subject>()
-            loop@ for (subject in pool) {
-                val available = seasons(subject.id, bearer)
-                if (available.isEmpty()) {
-                    unknown += subject
-                    continue
-                }
-                val serverSeason = when {
-                    available.contains(season) -> season
-                    available.firstOrNull() == 0 && available.contains(season - 1) -> season - 1
-                    else -> null
-                } ?: continue
-                val current = playInfo(subject.id, serverSeason, wantedEpisode, bearer, sourceTag)
-                if (current != null) {
-                    chosenId = subject.id
-                    result = current
-                    bearer = current.bearer
-                    break@loop
-                }
-            }
+        } catch (_: TvUnreachable) {
+            Log.e(
+                sourceTag,
+                "[MOVIEBOX-TV] STOP: $TV_URL tidak bisa dihubungi dari jaringan ini; " +
+                    "sumber MovieBox dilewati."
+            )
+            return
+        }
 
-            if (result == null) {
-                val fallbackPairs = if (season == 1) {
-                    listOf(1 to wantedEpisode, 0 to wantedEpisode)
-                } else {
-                    listOf(season to wantedEpisode)
-                }
-                loop@ for (subject in unknown) {
-                    for ((se, ep) in fallbackPairs) {
-                        val current = playInfo(subject.id, se, ep, bearer, sourceTag)
-                        if (current != null) {
-                            chosenId = subject.id
-                            result = current
-                            bearer = current.bearer
-                            break@loop
-                        }
-                    }
-                }
-            }
+        val current = playback ?: run {
+            Log.w(
+                sourceTag,
+                "[MOVIEBOX-TV] tidak ada stream untuk '$title' " +
+                    "(katalog MovieBox ada, tapi tanpa resource)"
+            )
+            return
         }
 
         val subjectId = chosenId ?: return
-        val streams = result?.streams ?: return
-        subtitles(subjectId, streams.firstOrNull()?.id, bearer, subtitleCallback)
-
-        for (stream in streams) {
-            val type = linkType(stream)
-            val q = quality(stream)
-            val kind = when (type) {
-                ExtractorLinkType.DASH -> "DASH"
-                ExtractorLinkType.M3U8 -> "HLS"
-                else -> "VIDEO"
-            }
-            val codec = stream.codec?.let { " ${it.uppercase()}" }.orEmpty()
-            val headers = mutableMapOf(
-                "Referer" to "$API_URL/",
-                "User-Agent" to USER_AGENT
-            )
-            stream.cookie?.let { headers["Cookie"] = it }
-
-            callback(
-                newExtractorLink(
-                    source = "MovieBox",
-                    name = "MovieBox $kind ${q}p$codec",
-                    url = stream.url,
-                    type = type
-                ) {
-                    quality = q
-                    this.headers = headers
-                }
-            )
+        try {
+            subtitles(subjectId, current.streams.firstOrNull()?.id, sourceTag, subtitleCallback)
+        } catch (_: TvUnreachable) {
+            // Subtitle opsional: kegagalan jaringan di sini tidak boleh
+            // membatalkan link yang sudah didapat.
         }
+        emit(current, sourceTag, callback)
     }
 }
