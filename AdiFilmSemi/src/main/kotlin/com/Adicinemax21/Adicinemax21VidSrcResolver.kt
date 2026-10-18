@@ -100,7 +100,16 @@ internal class Adicinemax21VidSrcResolver(
         val streamBase: String?,
         val metaApi: String?,
         val season: String,
-        val episode: String
+        val episode: String,
+        /**
+         * Token sekali-pakai untuk endpoint stream_urls. Tanpa ini api.php
+         * membalas {"status_code":"403","error":"invalid api token"}.
+         *
+         * Player mengirimnya sebagai query param api_token, bukan header dan
+         * bukan apiToken -- lihat baris 945 player.js:
+         *   return url + (url.indexOf('?') > -1 ? '&' : '?') + 'api_token=' + ...
+         */
+        val apiToken: String?
     )
 
     private data class MediaCandidate(
@@ -956,6 +965,12 @@ internal class Adicinemax21VidSrcResolver(
                 "streamBase"
             )
 
+        val apiToken =
+            getConfigString(
+                html,
+                "apiToken"
+            )
+
         if (
             exactApi == null &&
             streamBase == null
@@ -1010,7 +1025,8 @@ internal class Adicinemax21VidSrcResolver(
                     "metaApi"
                 ),
             season = season,
-            episode = episode
+            episode = episode,
+            apiToken = apiToken
         )
     }
 
@@ -1018,20 +1034,28 @@ internal class Adicinemax21VidSrcResolver(
         config: PlayerRuntimeConfig
     ): String {
 
-        config.exactApi?.let { exactApi ->
-            return exactApi
-        }
+        val base =
+            config.exactApi ?: run {
+                val streamBase =
+                    config.streamBase
+                        ?: return ""
 
-        val streamBase =
-            config.streamBase
-                ?: return ""
+                // Exact apiFor() shape proven by player.js. The final
+                // stream_urls parameter is deliberately bare, not =1.
+                streamBase +
+                    "&season=${encodeComponent(config.season)}" +
+                    "&episode=${encodeComponent(config.episode)}" +
+                    "&stream_urls"
+            }
 
-        // Exact apiFor() shape proven by player.js. The final
-        // stream_urls parameter is deliberately bare, not =1.
-        return streamBase +
-            "&season=${encodeComponent(config.season)}" +
-            "&episode=${encodeComponent(config.episode)}" +
-            "&stream_urls"
+        // stream_urls ditolak tanpa token: {"status_code":"403",
+        // "error":"invalid api token"}. Nama parameternya api_token -- bukan
+        // apiToken dan bukan header,Seen langsung di player.js baris 945.
+        val token =
+            config.apiToken
+                ?: return base
+
+        return base + "&api_token=" + encodeComponent(token)
     }
 
     private suspend fun selectMediaCandidate(
@@ -1168,7 +1192,9 @@ internal class Adicinemax21VidSrcResolver(
                 "|SEASON_PRESENT=" +
                 config.season.isNotBlank() +
                 "|EPISODE_PRESENT=" +
-                config.episode.isNotBlank()
+                config.episode.isNotBlank() +
+                "|API_TOKEN=" +
+                if (config.apiToken.isNullOrBlank()) "no" else "yes"
         )
 
         val sourceApiUrl =
