@@ -91,20 +91,42 @@ object AdiFilmSemiIdlix {
 
     private val IDX_SEARCH_SHAPES = listOf(
         IdxSearchShape("api/search?q=", "/api/search?q="),
-        IdxSearchShape("api/search?query=", "/api/search?query="),
-        IdxSearchShape("api/search?keyword=", "/api/search?keyword="),
-        IdxSearchShape("api/search?search=", "/api/search?search="),
-        IdxSearchShape("api/search/movie?q=", "/api/search/movie?q="),
-        IdxSearchShape("api/movies?search=", "/api/movies?search=")
+        IdxSearchShape("api/movies?search=", "/api/movies?search="),
+        // Ketiga nama di bawah membalas 400 "Query must be at least 1 character",
+        // jadi route /api/search itu ada -- hanya nama parameternya yang salah.
+        // Forma yang belum dicoba, untuk mencari nama yang benar.
+        IdxSearchShape("api/search?s=", "/api/search?s="),
+        IdxSearchShape("api/search?title=", "/api/search?title="),
+        IdxSearchShape("api/search?text=", "/api/search?text=")
     )
+
+    /**
+     * Judul yang pasti ada di katalog Idlix. dipakai untuk membuktikan sebuah
+     * endpoint benar-benar memfilter: kalau query ini juga kosong, endpoint-nya
+     * yang tidak berguna, bukan judul yang tidak ada.
+     */
+    private const val CONTROL_QUERY = "Inception"
 
     /** Hasil satu permintaan, lengkap dengan status dan cuplikan body supaya kegagalan bisa dibaca. */
     private data class IdxFetch(
         val code: Int,
         val items: List<IdxContent>,
         val sample: String,
+        /** Idlix menulis "order":"popular" saat query tidak menemukan apa pun lalu menjatuhkan daftar populer. */
+        val order: String? = null,
         val error: String? = null
-    )
+    ) {
+        /**
+         * True kalau balasan ini hasil fallback, bukan hasil pencarian.
+         *
+         * Untuk judul Korea "50대 묵은지 장모님의 유혹" endpoint mengembalikan
+         * 20 entri -- Hereditary, Stranger Things, X-Men -- semuanya film populer
+         * karena query-nya tidak menemukan apa pun. Tanpa ini plugin melaporkan
+         * "20 kandidat" lalu gagal semua, seolah Idlix punya isi padahal tidak.
+         */
+        val isPopularFallback: Boolean
+            get() = order != null && order.equals("popular", ignoreCase = true)
+    }
 
     /**
      * Terima tiga bentuk balasan: {"data":[...]}, {"results":[...]}, dan array polos.
@@ -123,10 +145,11 @@ object AdiFilmSemiIdlix {
             IdxFetch(
                 code = response.okhttpResponse.code,
                 items = (parsed?.data ?: parsed?.results).orEmpty(),
-                sample = text.take(110).replace(Regex("\\s+"), " ")
+                sample = text.take(110).replace(Regex("\\s+"), " "),
+                order = parsed?.order
             )
         } catch (error: Exception) {
-            IdxFetch(-1, emptyList(), "", "${error.javaClass.simpleName}: ${error.message}")
+            IdxFetch(-1, emptyList(), "", null, "${error.javaClass.simpleName}: ${error.message}")
         }
     }
 
@@ -180,6 +203,10 @@ object AdiFilmSemiIdlix {
             // beberapa bentuk, lalu pakai yang benar-benar memuat judul cocok.
             val activeQuery = queries.first()
             var chosen: IdxSearchShape? = null
+            // Kalau satu endpoint sudah terbukti memfilter, bentuk lain cukup
+            // dicoba dengan query aslinya saja. Tanpa ini setiap bentuk butuh dua
+            // request dan satu judul yang tidak ada bisa memakan belasan detik.
+            var filteringProven = false
 
             for (shape in IDX_SEARCH_SHAPES) {
                 val fetch = fetchIdx(shape.urlFor(activeQuery))
@@ -189,13 +216,33 @@ object AdiFilmSemiIdlix {
                 Log.d(
                     IDX_TAG,
                     "[2-PROBE] ${shape.label} http=${fetch.code} item=${fetch.items.size} " +
-                        "cocok=$relevant :: ${fetch.sample.ifBlank { fetch.error.orEmpty() }}"
+                        "order=${fetch.order ?: "-"} cocok=$relevant :: " +
+                        fetch.sample.ifBlank { fetch.error.orEmpty() }
                 )
                 if (relevant > 0) { chosen = shape; break }
-                // Enam permintaan dalam 1,4 detik membuat Cloudflare membalas
-                // halaman tantang: probe keenam semuanya item=0, tapi pencarian
-                // dengan endpoint yang sama 1,3 detik kemudian dapat 20 item.
-                // Satu request berurutan selalu lolos, jadi beri jeda.
+
+                if (!filteringProven && fetch.code == 200) {
+                    // Nol hasil belum berarti endpoint mati -- bisa jadi judulnya
+                    // memang tidak ada di katalog. Query kontrol yang pasti ada
+                    // memisahkan dua kemungkinan itu.
+                    delay(PROBE_GAP_MS)
+                    val ctrl = fetchIdx(shape.urlFor(CONTROL_QUERY))
+                    val ctrlMatch = ctrl.items.count { item ->
+                        rank(item.title, listOf(CONTROL_QUERY)) != null ||
+                            rank(item.originalTitle, listOf(CONTROL_QUERY)) != null
+                    }
+                    filteringProven = ctrlMatch > 0
+                    Log.d(
+                        IDX_TAG,
+                        "[2-PROBE] ${shape.label} kontrol '$CONTROL_QUERY' http=${ctrl.code} " +
+                            "order=${ctrl.order ?: "-"} item=${ctrl.items.size} cocok=$ctrlMatch :: " +
+                            if (ctrlMatch > 0) {
+                                "endpoint memfilter, jadi judul ini memang tidak ada di katalog Idlix"
+                            } else {
+                                "endpoint tidak mengembalikan apa pun, tidak berguna"
+                            }
+                    )
+                }
                 delay(PROBE_GAP_MS)
             }
 
@@ -204,12 +251,30 @@ object AdiFilmSemiIdlix {
             }
 
             val found = LinkedHashMap<String, IdxContent>()
+            var sawRealHit = false
             for (q in queries) {
                 delay(PROBE_GAP_MS)
-                fetchIdx(shape.urlFor(q)).items.forEach { item ->
+                val fetch = fetchIdx(shape.urlFor(q))
+                if (fetch.isPopularFallback) {
+                    // Balasan fallback: Idlix tidak menemukan apa pun lalu
+                    // menjatuhkan daftar populer. Memaksakan item itu masuk
+                    // daftar kandidat hanya mengecoh -- peringkat pasti
+                    // menolaknya semua, dan hasil akhirnya tetap nol.
+                    Log.d(
+                        IDX_TAG,
+                        "[2-SEARCH] '$q' http=${fetch.code} order=popular " +
+                            "-> ${fetch.items.size} item populer diabaikan, bukan hasil pencarian"
+                    )
+                    continue
+                }
+                sawRealHit = true
+                fetch.items.forEach { item ->
                     val slug = item.slug ?: return@forEach
                     if (!found.containsKey(slug)) found[slug] = item
                 }
+            }
+            if (found.isEmpty() && !sawRealHit) {
+                Log.d(IDX_TAG, "[2-SEARCH] '$activeQuery' tidak ada di katalog Idlix")
             }
             Log.d(IDX_TAG, "[2-SEARCH] kandidat mentah=${found.size} lewat ${shape.label}")
             if (found.isEmpty()) return
@@ -443,7 +508,9 @@ object AdiFilmSemiIdlix {
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class IdxSearchResponse(
         @JsonProperty("data") val data: List<IdxContent>? = null,
-        @JsonProperty("results") val results: List<IdxContent>? = null
+        @JsonProperty("results") val results: List<IdxContent>? = null,
+        /** "popular" berarti Idlix tidak menemukan apa pun dan menjatuhkan daftar populer. */
+        @JsonProperty("order") val order: String? = null
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
