@@ -192,7 +192,13 @@ object AdiFilmSemiIdlix {
     ) {
         try {
             val isSeries = season != null
-            val queries = listOfNotNull(title, orgTitle, altTitle).distinct()
+            // altTitle pernah sampai sebagai teks "null", bukan null -- listOfNotNull
+            // tidak menyaringnya, jadi ada request ketiga untuk mencari kata
+            // "null". Buang string itu bersama yang kosong.
+            val queries = listOfNotNull(title, orgTitle, altTitle)
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+                .distinct()
             Log.d(IDX_TAG, "[1-MULAI] title=$title org=$orgTitle alt=$altTitle year=$year s=$season e=$episode")
 
             // ---------- 1. SEARCH ----------
