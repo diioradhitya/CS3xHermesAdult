@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,22 +10,22 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import android.content.Context
-import com.Adicinemax21.Adicinemax21VidSrc
-import com.Adicinemax21.MovieBoxV2Shared
+import com.filmsemi.FilmSemiVidSrc
+import com.filmsemi.MovieBoxV2Shared
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 
 @CloudstreamPlugin
-class AdiFilmSemiPlugin : Plugin() {
+class FilmSemiPlugin : Plugin() {
     override fun load(context: Context) {
-        AdiFilmSemiExtractor.attachContext(context)
+        FilmSemiExtractor.attachContext(context)
         MovieBoxV2Shared.attachContext(context)
-        Adicinemax21VidSrc.attachContext(context)
+        FilmSemiVidSrc.attachContext(context)
 
         // Tiga sumber berdiri sendiri di plugin ini: MovieBox, Idlix, VidSrc.
-        registerMainAPI(AdiFilmSemiPlaybackFixedProvider())
+        registerMainAPI(FilmSemiPlaybackFixedProvider())
     }
 }

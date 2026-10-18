@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,11 +10,11 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.michat88.AdiFilmSemiExtractor.invokeMoviebox
-import com.michat88.AdiFilmSemiIdlix.invokeIdlix
+import com.filmsemi.FilmSemiExtractor.invokeMoviebox
+import com.filmsemi.FilmSemiIdlix.invokeIdlix
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
@@ -24,8 +24,8 @@ import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 
-open class AdiFilmSemi : TmdbProvider() {
-    override var name = "AdiFilmSemi"
+open class FilmSemi : TmdbProvider() {
+    override var name = "FilmSemi"
     override val hasMainPage = true
     override var lang = "id"
     override val instantLinkLoading = true

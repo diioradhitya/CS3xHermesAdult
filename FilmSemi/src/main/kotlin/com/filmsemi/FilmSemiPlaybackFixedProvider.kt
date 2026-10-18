@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,11 +10,11 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import android.util.Log
-import com.Adicinemax21.Adicinemax21VidSrc
-import com.Adicinemax21.MovieBoxV2Shared
+import com.filmsemi.FilmSemiVidSrc
+import com.filmsemi.MovieBoxV2Shared
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.CompletableDeferred
@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 
 /** Tiga sumber lokal: MovieBox, Idlix, dan VidSrc. */
-class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
+class FilmSemiPlaybackFixedProvider : FilmSemi() {
     companion object {
         private const val SOURCE_GRACE_MS = 40_000L
         private const val GRACE_POLL_MS = 75L
@@ -58,7 +58,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
         sourceKeys.add(family)
         val position = emitted.incrementAndGet()
         callback(link)
-        Log.i("AdiFilmSemi", "[THREE-SOURCE] callback|FAMILY=$family|LINKS=$position|FAMILIES=${sourceKeys.size}")
+        Log.i("FilmSemi", "[THREE-SOURCE] callback|FAMILY=$family|LINKS=$position|FAMILIES=${sourceKeys.size}")
         if (position == 1) firstReady.complete(true)
     }
 
@@ -76,7 +76,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
         val payload = JSONObject(data)
         val title = stringOrNull(payload, "title") ?: return
         MovieBoxV2Shared.invokeMoviebox(
-            sourceTag = "AdiFilmSemi",
+            sourceTag = "FilmSemi",
             title = title,
             orgTitle = stringOrNull(payload, "orgTitle"),
             altTitle = stringOrNull(payload, "jpTitle"),
@@ -102,7 +102,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
         } else {
             intOrNull(payload, "year")
         }
-        AdiFilmSemiIdlix.invokeIdlix(
+        FilmSemiIdlix.invokeIdlix(
             title = title,
             orgTitle = stringOrNull(payload, "orgTitle"),
             altTitle = stringOrNull(payload, "jpTitle"),
@@ -121,7 +121,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
     ) {
         val payload = JSONObject(data)
         val tmdbId = intOrNull(payload, "id") ?: return
-        Adicinemax21VidSrc.invokeVidSrc(
+        FilmSemiVidSrc.invokeVidSrc(
             tmdbId = tmdbId,
             type = stringOrNull(payload, "type"),
             season = intOrNull(payload, "season"),
@@ -140,21 +140,21 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
             try { loadMovieBox(data, subtitleCallback, callback) }
             catch (error: Exception) {
                 if (error is CancellationException) throw error
-                Log.e("AdiFilmSemi", "[MOVIEBOX-V2] ${error.javaClass.simpleName}: ${error.message}")
+                Log.e("FilmSemi", "[MOVIEBOX-V2] ${error.javaClass.simpleName}: ${error.message}")
             }
         }
         val idlix = launch {
             try { loadIdlix(data, subtitleCallback, callback) }
             catch (error: Exception) {
                 if (error is CancellationException) throw error
-                Log.e("AdiFilmSemi", "[IDLIX] ${error.javaClass.simpleName}: ${error.message}")
+                Log.e("FilmSemi", "[IDLIX] ${error.javaClass.simpleName}: ${error.message}")
             }
         }
         val vidSrc = launch {
             try { loadVidSrc(data, subtitleCallback, callback) }
             catch (error: Exception) {
                 if (error is CancellationException) throw error
-                Log.e("AdiFilmSemi", "[VIDSRC] ${error.javaClass.simpleName}: ${error.message}")
+                Log.e("FilmSemi", "[VIDSRC] ${error.javaClass.simpleName}: ${error.message}")
             }
         }
         joinAll(movieBox, idlix, vidSrc)
@@ -176,7 +176,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
                 loadAllSources(data, subtitleCallback, forward)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                Log.e("AdiFilmSemi", "[THREE-SOURCE] resolver error: ${error.message}")
+                Log.e("FilmSemi", "[THREE-SOURCE] resolver error: ${error.message}")
             } finally {
                 if (!firstReady.isCompleted) firstReady.complete(emitted.get() > 0)
             }
@@ -198,7 +198,7 @@ class AdiFilmSemiPlaybackFixedProvider : AdiFilmSemi() {
         if (loaderJob.isActive && sourceKeys.size >= TARGET_SOURCE_COUNT) delay(FINAL_SETTLE_MS)
         if (loaderJob.isActive) loaderJob.cancelAndJoin()
 
-        Log.i("AdiFilmSemi", "[THREE-SOURCE] release-player|LINKS=${emitted.get()}|FAMILIES=${sourceKeys.joinToString(",")}")
+        Log.i("FilmSemi", "[THREE-SOURCE] release-player|LINKS=${emitted.get()}|FAMILIES=${sourceKeys.joinToString(",")}")
         emitted.get() > 0
     }
 

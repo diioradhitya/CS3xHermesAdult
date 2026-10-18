@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.Adicinemax21
+package com.filmsemi
 
 import android.content.Context
 import android.util.Log
@@ -25,13 +25,13 @@ import kotlin.coroutines.cancellation.CancellationException
  * VidSrc source transplanted from Streamzy.
  *
  * Scope is intentionally narrow:
- * - receives TMDB id/season/episode already produced by Adicinemax21;
+ * - receives TMDB id/season/episode already produced by FilmSemi;
  * - builds only vidsrc.mov embed URLs;
  * - delegates playback resolution to the same VidSrc resolver used by Streamzy;
  * - does not alter TMDB, MovieBox, Idlix, metadata, search, or other provider logic.
  */
-internal object Adicinemax21VidSrc {
-    private const val TAG = "Adicinemax21VS"
+internal object FilmSemiVidSrc {
+    private const val TAG = "FilmSemiVS"
     private const val STREAMZY_BASE = "https://streamzy.org"
     private const val VIDSRC_BASE = "https://vidsrc.mov"
 
@@ -161,7 +161,7 @@ internal object Adicinemax21VidSrc {
                 "HOST=${safeHost(embedUrl)}"
         )
 
-        val resolver = Adicinemax21VidSrcResolver(
+        val resolver = FilmSemiVidSrcResolver(
             applicationContext = context,
             sourceName = "VidSrc",
             logMarkerCallback = ::logMarker,

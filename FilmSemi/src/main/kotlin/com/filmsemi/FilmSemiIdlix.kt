@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -27,7 +27,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /**
  * ================== IDLIX SOURCE ==================
  *
- * Sumber tambahan untuk AdiFilmSemi. Katalog, detail, pencarian, dan metadata
+ * Sumber tambahan untuk FilmSemi. Katalog, detail, pencarian, dan metadata
  * tetap sepenuhnya dari TMDB; berkas ini HANYA menghasilkan ExtractorLink dan
  * SubtitleFile; source playback aktif lainnya hanya MovieBox.
  *
@@ -43,14 +43,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
  *       -> /api/watch/session/claim (claim)
  *       -> Majorplay /api/play      (master m3u8 + subtitle)
  *
- * DIAGNOSTIK: filter logcat dengan tag "AdiFilmSemiIDX".
+ * DIAGNOSTIK: filter logcat dengan tag "FilmSemiIDX".
  *
  * Seluruh DTO sengaja nested di dalam object ini supaya nama seperti Cast dan
- * Genre tidak bentrok dengan data class TMDB milik AdiFilmSemi.
+ * Genre tidak bentrok dengan data class TMDB milik FilmSemi.
  */
-object AdiFilmSemiIdlix {
+object FilmSemiIdlix {
 
-    private const val IDX_TAG = "AdiFilmSemiIDX"
+    private const val IDX_TAG = "FilmSemiIDX"
 
     private const val MAIN_URL = "https://z2.idlixku.com"
 

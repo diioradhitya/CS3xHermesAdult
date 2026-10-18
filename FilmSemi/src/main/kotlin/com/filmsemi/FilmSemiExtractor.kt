@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import android.content.Context
 import android.util.Base64
@@ -28,21 +28,21 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
 
-object AdiFilmSemiExtractor : AdiFilmSemi() {
+object FilmSemiExtractor : FilmSemi() {
 
     // ================== MOVIEBOX SOURCE ==================
     // Engine diambil dari MovieBoxProvider, TANPA membawa mainPage/search/
     // quickSearch/load/detail/recommendation miliknya, karena semua itu sudah
-    // ditangani TMDB di AdiFilmSemi.
+    // ditangani TMDB di FilmSemi.
     //
     // Alur: TMDB load() -> LinkData -> loadLinks() -> invokeMoviebox()
     //       -> search/v2 -> season-info -> play-info -> ExtractorLink (+ Cookie)
     //
-    // DIAGNOSTIK: filter logcat dengan tag "AdiFilmSemiMB".
-    private const val MB_TAG = "AdiFilmSemiMB"
+    // DIAGNOSTIK: filter logcat dengan tag "FilmSemiMB".
+    private const val MB_TAG = "FilmSemiMB"
 
     /**
-     * Dipanggil dari AdiFilmSemiPlugin.load(). Menyiapkan identity persisten
+     * Dipanggil dari FilmSemiPlugin.load(). Menyiapkan identity persisten
      * MovieBox sebelum request pertama. Hanya meneruskan Context; tidak
      * mengubah jalur TMDB maupun sumber Idlix.
      */
@@ -441,7 +441,7 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
                 newExtractorLink("MovieBox", label, streamUrl, INFER_TYPE) {
                     this.referer = MovieboxHelper.API_URL
                     this.quality = quality
-                    // Cookie di sini dibaca lagi oleh AdiFilmSemi.getVideoInterceptor()
+                    // Cookie di sini dibaca lagi oleh FilmSemi.getVideoInterceptor()
                     // supaya ExoPlayer ikut mengirimnya ke CDN.
                     this.headers = mapOf(
                         "User-Agent" to MovieboxHelper.USER_AGENT,

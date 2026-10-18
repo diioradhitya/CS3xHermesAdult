@@ -7,11 +7,11 @@ CloudStream extensions for adult/NSFW content.
 | Plugin | Status | Description |
 |--------|--------|-------------|
 | JavHey | ✅ Online | JAV streaming with Indonesian subtitles |
-| AdiFilmSemi | ✅ Online | Multi-site (Idlix, MovieBox, Vidsrc, Streamzy) — **third-party, see [Attribution](#attribution)** |
+| FilmSemi | ✅ Online | MovieBox, Idlix, VidSrc — **third-party code, see [Attribution](#attribution)** |
 
 ## Attribution
 
-### AdiFilmSemi
+### FilmSemi  (sebelumnya AdiFilmSemi)
 
 Not written for this repository. Copied from:
 

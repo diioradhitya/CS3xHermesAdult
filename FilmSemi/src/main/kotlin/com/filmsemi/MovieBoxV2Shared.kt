@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.Adicinemax21
+package com.filmsemi
 
 import android.content.Context
 import android.os.Build
@@ -32,7 +32,8 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
 
 /**
- * Shared MovieBox source used by Adicinemax21, AdiDrakor, AdiFilmSemi and AdiXtream.
+ * Shared MovieBox source for FilmSemi. In the upstream repository this same
+ * file backed Adicinemax21, AdiDrakor, AdiFilmSemi and AdiXtream.
  *
  * Scope is intentionally MovieBox-only. Metadata, Idlix, VidSrc and each host
  * provider remain owned by their original implementation.

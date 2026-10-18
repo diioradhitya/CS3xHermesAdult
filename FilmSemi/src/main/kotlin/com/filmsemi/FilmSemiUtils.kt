@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.michat88
+package com.filmsemi
 
 import com.lagradost.cloudstream3.APIHolder.unixTimeMS
 import com.lagradost.cloudstream3.mvvm.logError
@@ -22,7 +22,7 @@ import java.util.Locale
 // File ini sekarang hanya menyimpan helper yang dibutuhkan katalog TMDB dan MovieBox.
 
 /**
- * Dipakai di AdiFilmSemi.load() untuk menandai episode/film yang belum rilis.
+ * Dipakai di FilmSemi.load() untuk menandai episode/film yang belum rilis.
  */
 fun isUpcoming(dateString: String?): Boolean {
     return try {

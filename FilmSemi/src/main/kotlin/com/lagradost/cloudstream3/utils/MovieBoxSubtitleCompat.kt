@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,30 +10,9 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-// use an integer for version numbers
-version = 26
+package com.lagradost.cloudstream3.utils
 
+import com.lagradost.cloudstream3.SubtitleFile
 
-cloudstream {
-    language = "id"
-    // All of these properties are optional, you can safely remove them
-
-    // description = "Lorem Ipsum"
-    authors = listOf("aldry84")
-
-    /**
-     * Status int as the following:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     * */
-    status = 1 // will be 3 if unspecified
-    tvTypes = listOf(
-        "NSFW",
-    )
-
-
-    iconUrl = "https://klikxxi.me/wp-content/uploads/2024/02/cropped-site-icon.png"
-
-}
+/** MovieBox-only compatibility shim for the CloudStream API used by this repo. */
+fun newSubtitleFile(name: String, url: String): SubtitleFile = SubtitleFile(name, url)

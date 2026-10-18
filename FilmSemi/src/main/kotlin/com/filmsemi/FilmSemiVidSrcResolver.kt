@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// AdiFilmSemi
+// FilmSemi
 //
 // Diambil dari: https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi
 // Penulis asli : aldry84  (build.gradle.kts di repo asal menyatakan
@@ -10,7 +10,7 @@
 // kredit ini. Jangan dianggap karya asli repo ini.
 // ---------------------------------------------------------------------------
 
-package com.Adicinemax21
+package com.filmsemi
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 
-internal class Adicinemax21VidSrcResolver(
+internal class FilmSemiVidSrcResolver(
     private val applicationContext: Context,
     private val sourceName: String,
     private val logMarkerCallback: (String) -> Unit,
