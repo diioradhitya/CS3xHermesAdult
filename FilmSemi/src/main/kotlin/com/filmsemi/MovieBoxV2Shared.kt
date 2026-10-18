@@ -22,6 +22,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.newSubtitleFile
+import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -183,7 +184,13 @@ object MovieBoxV2Shared {
         ts: String,
         body: String = ""
     ): String {
-        val length = if (body.isEmpty()) "" else body.length.toString()
+        // Panjang body dihitung dalam BYTE UTF-8, bukan jumlah karakter.
+        // String.length di Kotlin menghitung unit UTF-16, jadi judul Korea
+        // (atau karakter non-ASCII apa pun) menghasilkan canonical yang beda
+        // dari yang dihitung gateway: jawabannya HTTP 407 "Signature invalid",
+        // dan pencarian dengan judul asli selalu gagal diam-diam.
+        val length = if (body.isEmpty()) "" else
+            body.toByteArray(Charsets.UTF_8).size.toString()
         val digest = if (body.isEmpty()) "" else md5(body)
         return listOf(
             method.uppercase(),
@@ -251,35 +258,44 @@ object MovieBoxV2Shared {
         clientInfo: String,
         tag: String
     ): String? {
-        val ts = System.currentTimeMillis().toString()
-        val signed = headers(
-            ts,
-            normalSignature(method, target, ts, body.orEmpty()),
-            bearer,
-            status,
-            clientInfo
-        )
-        return try {
-            val response = if (method == "POST") {
-                app.post(
-                    "$url$target",
-                    headers = signed,
-                    requestBody = (body ?: "").toByteArray(Charsets.UTF_8)
-                        .toRequestBody("application/json".toMediaTypeOrNull())
-                )
-            } else {
-                app.get("$url$target", headers = signed)
-            }
-            if (response.code == 200) {
-                response.text
-            } else {
+        // Gateway menjawab signature yang tidak cocok dengan HTTP 407, dan OkHttp
+        // melemparkan ProtocolException untuk status itu. Karena 407 bisa juga
+        // datang sekilas dari sisi jaringan, satu percobaan ulang dengan ts baru
+        // dilakukan sebelum host dinyatakan tidak bisa dihubungi.
+        var lastError: Exception? = null
+        for (attempt in 0..1) {
+            val ts = System.currentTimeMillis().toString()
+            val signed = headers(
+                ts,
+                normalSignature(method, target, ts, body.orEmpty()),
+                bearer,
+                status,
+                clientInfo
+            )
+            try {
+                val response = if (method == "POST") {
+                    app.post(
+                        "$url$target",
+                        headers = signed,
+                        requestBody = (body ?: "").toByteArray(Charsets.UTF_8)
+                            .toRequestBody("application/json".toMediaTypeOrNull())
+                    )
+                } else {
+                    app.get("$url$target", headers = signed)
+                }
+                if (response.code == 200) {
+                    return response.text
+                }
                 Log.w(tag, "[MOVIEBOX-TV] http=${response.code} $target")
-                null
+                return null
+            } catch (e: Exception) {
+                lastError = e
+                val suffix = if (attempt == 0) " (dicoba ulang)" else ""
+                Log.e(tag, "[MOVIEBOX-TV] request gagal $target: ${e.message}$suffix")
+                delay(400)
             }
-        } catch (e: Exception) {
-            Log.e(tag, "[MOVIEBOX-TV] request gagal $target: ${e.message}")
-            throw TvUnreachable(e)
         }
+        throw TvUnreachable(lastError ?: RuntimeException("request gagal"))
     }
 
     /** Panggilan BFF TV (tamu: X-Client-Status 1, tanpa Authorization). */
