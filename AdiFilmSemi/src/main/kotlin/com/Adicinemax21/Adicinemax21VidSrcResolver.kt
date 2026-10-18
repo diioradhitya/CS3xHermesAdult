@@ -74,6 +74,15 @@ internal class Adicinemax21VidSrcResolver(
     )
 
     private data class StreamApiResponse(
+        /**
+         * Nilainya tidak konsisten: judul yang ada di katalog membalas
+         * {"status_code":"200"} (string), judul yang tidak ada membalas
+         * {"status_code":404} (angka, dan tanpa "data" sama sekali).
+         * Jadi dibaca sebagai Any lalu di-string-kan.
+         */
+        @param:JsonProperty("status_code")
+        val statusCode: Any? = null,
+
         @param:JsonProperty("data")
         val data: StreamApiData? = null,
 
@@ -870,15 +879,33 @@ internal class Adicinemax21VidSrcResolver(
                 ?.data
                 ?.streamUrls
 
+        val apiStatus =
+            payload
+                ?.statusCode
+                ?.toString()
+                ?.removeSuffix(".0")
+                .orEmpty()
+
         logMarker(
             "STREAM_API|HOST=${safeHost(sourceApiUrl)}|" +
                 "HTTP=${response.okhttpResponse.code}|" +
+                "STATUS=$apiStatus|" +
                 "STREAM_URLS_TYPE=" +
                 when (rawStreams) {
                     is String -> "string"
                     is List<*> -> "array"
                     null -> "missing"
                     else -> "unsupported"
+                } +
+                if (rawStreams == null) {
+                    // HTTP 200 tanpa "data" berarti judulnya tidak ada di
+                    // katalog VidSrc, bukan parsing yang rusak. Dibuktikan dari
+                    // perangkat: 872585 -> status_code 200 + stream_urls,
+                    // 1099639 -> {"status_code":404} tanpa "data".
+                    "|CATALOG=" +
+                        if (apiStatus == "404") "absent" else "unknown"
+                } else {
+                    ""
                 }
         )
 
