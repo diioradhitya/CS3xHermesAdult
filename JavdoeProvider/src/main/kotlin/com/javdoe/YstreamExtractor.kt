@@ -36,6 +36,9 @@ class YstreamExtractor : ExtractorApi() {
 
     companion object {
         private const val TAG = "YstreamExtractor"
+
+        /** Fallback Origin when the caller passes no referer. */
+        private const val DEFAULT_SITE_ORIGIN = "https://javdoe.sh"
     }
 
     /* ------------------------------------------------------------------ */
@@ -381,9 +384,18 @@ class YstreamExtractor : ExtractorApi() {
             Log.e(TAG, "no Byse code in $url")
             return
         }
-        // The deployment is the embed's own host - never the one baked in at build time.
-        siteOrigin = refererUrl
-        Log.d(TAG, "START code=$code origin=$siteOrigin host=${URI(url).host}")
+        // The Origin header has to be the site that *embeds* the player, not
+        // the embed host. The API checks it per video: a code from javdoe.sh
+        // answers "invalid" for every other origin, and the PoW challenge
+        // never converges.
+        //
+        // The referer is the post page the embed sits on, so its origin is
+        // the right one. Taking the base of the embed url instead (the old
+        // behaviour) produced the Byse host, which is exactly the host the
+        // API refuses.
+        siteOrigin = referer?.let { getBaseUrl(it) }?.takeIf { it.startsWith("http") }
+            ?: DEFAULT_SITE_ORIGIN
+        Log.d(TAG, "START code=$code origin=$siteOrigin host=${URI(url).host} referer=$referer")
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
         // Step 0: structural fingerprint.
@@ -396,7 +408,10 @@ class YstreamExtractor : ExtractorApi() {
         // The API host rotates per video, so always start from the site origin
         // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders)
+        // The API host rotates per video, so ask the host we were handed by
+        // the iframe rather than the site origin.
+        val embedHost = getBaseUrl(url)
+        val detailsRaw = httpGet("$embedHost/api/videos/$code/embed/details", detailsHeaders)
         if (detailsRaw.isNullOrBlank()) {
             Log.e(TAG, "details: empty response for code=$code")
             return
@@ -489,12 +504,72 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "stream URL: ${streamUrl.take(80)}...")
 
-        M3u8Helper.generateM3u8(
-            name,
-            streamUrl,
-            refererUrl,
-            headers = mapOf("Referer" to "$siteOrigin/e/$code/", "User-Agent" to ua)
-        ).forEach(callback)
+        val streamHeaders = mapOf("Referer" to "$siteOrigin/e/$code/", "User-Agent" to ua)
+
+        // M3u8Helper must not be used for this playlist.
+        //
+        // It validates the playlist with `app.get(...)`, and CloudStream's
+        // session carries a *desktop* Chrome User-Agent as a default header.
+        // NiceHttp puts that default last, so a per-request "User-Agent"
+        // cannot override it - and this CDN only serves the playlist to a
+        // mobile User-Agent: with the desktop one it answers 404, M3u8Helper
+        // then discards the link ("not a Master Playlist nor a Media
+        // Playlist"), and the player is left with no links at all.
+        //
+        // Verified on the live CDN:
+        //   mobile UA                    -> 200 #EXTM3U
+        //   desktop UA (CloudStream's)   -> 404
+        //   NiceHttp with a desktop default UA -> 404, even with a mobile
+        //                                      User-Agent in the request headers
+        //
+        // So fetch the playlist here, with this provider's own client and the
+        // mobile User-Agent, and hand the player a link that carries that
+        // User-Agent. The player prefers the link's User-Agent over the app
+        // default, so it fetches the stream the same way.
+        //
+        // The master also carries an #EXT-X-I-FRAME-STREAM-INF trick-play
+        // track reporting the same RESOLUTION as the rendition, and ExoPlayer
+        // lists both as video tracks. Point at the variant itself when there
+        // is exactly one real rendition; keep the master when there is a
+        // genuine ladder so the quality selector keeps working.
+        val finalUrl = resolveSingleVariant(streamUrl, streamHeaders)
+        Log.d(TAG, "final URL: ${finalUrl.take(80)}...")
+
+        callback(
+            newExtractorLink(name, name, finalUrl) {
+                this.referer = refererUrl
+                this.headers = streamHeaders
+            }
+        )
+    }
+
+    /**
+     * Returns the variant playlist URL when [masterUrl] has exactly one real
+     * rendition, otherwise [masterUrl] untouched so the player keeps the full
+     * ladder for its quality selector.
+     */
+    private fun resolveSingleVariant(masterUrl: String, headers: Map<String, String>): String {
+        val text = httpGet(masterUrl, headers) ?: return masterUrl
+        val variants = mutableListOf<String>()
+        var pending = false
+        for (line in text.lineSequence()) {
+            val t = line.trim()
+            when {
+                t.startsWith("#EXT-X-STREAM-INF:") -> pending = true
+                t.startsWith("#EXT-X-I-FRAME-STREAM-INF") -> Unit // trick-play, not a rendition
+                t.isEmpty() || t.startsWith("#") -> Unit
+                pending -> {
+                    variants += t
+                    pending = false
+                }
+            }
+        }
+        Log.d(TAG, "master has ${variants.size} real variant(s)")
+        if (variants.size != 1) return masterUrl
+        val variant = variants.first()
+        if (variant.startsWith("http")) return variant
+        return runCatching { java.net.URI(masterUrl).resolve(variant).toString() }
+            .getOrDefault(masterUrl)
     }
 }
 
