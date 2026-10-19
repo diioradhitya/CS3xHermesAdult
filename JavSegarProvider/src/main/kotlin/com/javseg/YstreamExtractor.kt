@@ -35,6 +35,9 @@ class YstreamExtractor : ExtractorApi() {
 
     companion object {
         private const val TAG = "YstreamExtractor"
+
+        /** Fallback Origin when the caller passes no referer. */
+        private const val DEFAULT_SITE_ORIGIN = "https://javsegar.com"
     }
 
     /* ------------------------------------------------------------------ */
@@ -158,7 +161,24 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
-    private val siteOrigin = "https://ystream.id"
+    /**
+     * The site that *embeds* the player, used for the Origin header.
+     *
+     * The API checks the Origin against it, and a wrong Origin does not
+     * produce an error - it makes the PoW challenge unsolvable, so the
+     * solver spins until it times out, verify answers "invalid" and
+     * playback answers 428 "captcha_required". On the device that reads as
+     * "no links found".
+     *
+     * Verified live for embed code ktlp8hx3vfnz:
+     *   Origin: https://ystream.id  -> PoW never converges, verify "invalid"
+     *   Origin: https://javsegar.com -> verify "ok", playback 200
+     *
+     * The origin is therefore taken from the referer, which is the post page
+     * the embed sits on, instead of being pinned to the embed host.
+     */
+    @Volatile
+    private var siteOrigin: String = DEFAULT_SITE_ORIGIN
 
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
@@ -368,6 +388,13 @@ class YstreamExtractor : ExtractorApi() {
         val refererUrl = getBaseUrl(url)
         val code = getCodeFromUrl(url)
         if (code.isEmpty()) return
+
+        // The Origin header has to be the site that embeds the player, not
+        // the embed host. It cannot be taken from the referer here: this
+        // provider hands the *iframe* url to loadLinks, so the referer would
+        // be ystream.id - exactly the host that must not appear. The site is
+        // fixed for this provider, so it is a constant.
+        siteOrigin = DEFAULT_SITE_ORIGIN
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
         // Step 0: structural fingerprint.
@@ -380,7 +407,10 @@ class YstreamExtractor : ExtractorApi() {
         // The API host rotates per video, so always start from the site origin
         // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders) ?: return
+        // The API host rotates per video, so ask the host we were handed by
+        // the iframe rather than the site origin.
+        val embedHost = getBaseUrl(url)
+        val detailsRaw = httpGet("$embedHost/api/videos/$code/embed/details", detailsHeaders) ?: return
         val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
         val embedFrameUrl = details.embedFrameUrl
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
