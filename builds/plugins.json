@@ -22,14 +22,14 @@
   {
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "status": 2,
-    "version": 22,
+    "version": 23,
     "name": "AVTube",
     "internalName": "AVTubeProvider",
     "authors": [
       "Dio R"
     ],
-    "description": "AVTube - Indonesian adult streaming (fixed Morencius+EarnVids m3u8, Ystream verified)",
-    "fileSize": 45106,
+    "description": "AVTube \u2014 Indonesian adult streaming, Ystream/Byse embed fixed",
+    "fileSize": 45715,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "language": "id",
     "tvTypes": [
@@ -37,7 +37,7 @@
     ],
     "iconUrl": "https://avtubreal.com/wp-content/uploads/2023/12/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-2beebebf939941520fd91a9e25b58b793740b7d32f14311dbf7701cbd9714e2d"
+    "fileHash": "sha256-668e413b9e2ecfed97543793fecdec442e2fbb5f223d1449b4eceb4a81ed1fd1"
   },
   {
     "internalName": "JavdoeProvider",

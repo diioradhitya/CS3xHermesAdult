@@ -185,6 +185,38 @@ class AVTubeProvider : MainAPI() {
     private fun isKnownFamilyHost(url: String): Boolean =
         isYstreamHost(url) || isMorenciusHost(url)
 
+    /**
+     * Hosts that serve an /e/<code> path but are NOT ours.
+     *
+     * The Byse/ystream family and the built-in Vidara family both use
+     * /e/<code>, so the shape test alone cannot tell them apart. Measured on
+     * the live site (avtubreal.com, 10 posts): 6 embeds are vidara.to/e/…,
+     * 3 are ystream.id/e/…, 1 post has no iframe at all. Sending a vidara
+     * code to the ystream API answers "video record missing" and the title
+     * reports "No Links Found" even though the video plays in a browser -
+     * the v18 bug in a new place.
+     *
+     * These are the built-in hosts CloudStream already covers, so the
+     * built-in extractor gets first refusal and this list only has to keep
+     * the shape test from stealing them afterwards.
+     */
+    private val FOREIGN_E_PATH_HOSTS = listOf(
+        "vidara.",       // Vidara / vidarax / vidaraw / vidaraa / vidara.so
+        "doodstream",
+        "dood.to",
+        "streamtape.",
+        "streamtape",
+        "playmogo",
+        "mycloudz",
+        "cloudwish",
+        "streambeast",
+    )
+
+    private fun isForeignEPathHost(url: String): Boolean {
+        val host = hostOf(url)
+        return FOREIGN_E_PATH_HOSTS.any { host.contains(it) }
+    }
+
     private fun hostOf(url: String): String =
         url.substringAfter("://", "").substringBefore('/').substringBefore(':').lowercase()
 
@@ -206,6 +238,10 @@ class AVTubeProvider : MainAPI() {
      */
     private fun isYstreamFamily(url: String): Boolean {
         if (isYstreamHost(url)) return true
+        // A rotated domain is still recognised by the /e/<code> shape, but
+        // that shape is shared with the built-in Vidara and DoodStream
+        // families, so a foreign host is never taken on shape alone.
+        if (isForeignEPathHost(url)) return false
         return Regex("""https?://[^/]+/(?:e|d|v)/[A-Za-z0-9]{6,}""").containsMatchIn(url)
     }
 

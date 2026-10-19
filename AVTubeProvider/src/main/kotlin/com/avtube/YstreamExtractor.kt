@@ -36,6 +36,12 @@ class YstreamExtractor : ExtractorApi() {
 
     companion object {
         private const val TAG = "YstreamExtractor"
+
+        /**
+         * Fallback Origin when the caller passes no referer. The embed family
+         * is used by avtubreal.com; the referer normally wins anyway.
+         */
+        private const val DEFAULT_SITE_ORIGIN = "https://avtubreal.com"
     }
 
     /* ------------------------------------------------------------------ */
@@ -159,7 +165,36 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
-    private val siteOrigin = "https://ystream.id"
+    /**
+     * The two bases are different hosts and confusing them is what broke
+     * playback:
+     *
+     *  - [siteOrigin] is the site that *embeds* the player. The API checks
+     *    the Origin header against it and rejects a request from any other
+     *    domain, so this has to be the site the user is watching - here
+     *    avtubreal.com - and never the embed host.
+     *  - [apiBase] is the host that serves the embed API. The embed host
+     *    rotates (ystream.id, f7hyg4q.org, n1mwq.org, ...), so it is read out
+     *    of the iframe that was handed to us instead of being pinned.
+     *
+     * Verified live for embed code lv4arqippsfw:
+     *   Origin: https://ystream.id   -> the PoW challenge never converges
+     *                                    (the solver spins until it times
+     *                                    out), verify answers "invalid"
+     *                                    and playback 428 "captcha_required"
+     *   Origin: https://avtubreal.com -> verify "ok", playback 200, the
+     *                                    encrypted payload decrypts
+     *
+     * The site is not guessed: it is read out of the referer, which is the
+     * page the embed sits on. That keeps the same extractor correct on any
+     * site that embeds this family.
+     */
+    @Volatile
+    private var siteOrigin: String = DEFAULT_SITE_ORIGIN
+
+    /** Host that serves /api/videos/...; taken from the iframe, may be null. */
+    @Volatile
+    private var apiBase: String? = null
 
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
@@ -369,7 +404,14 @@ class YstreamExtractor : ExtractorApi() {
         val refererUrl = getBaseUrl(url)
         val code = getCodeFromUrl(url)
         if (code.isEmpty()) return
-        Log.d(TAG, "=== START extract code=$code referer=$referer ===")
+
+        // The Origin header has to be the site that embeds the player, not
+        // the embed host. The referer is that page, so take the origin from
+        // it. Falling back to the provider's own site keeps the extractor
+        // usable when the caller has no referer.
+        val refererOrigin = referer?.let { getBaseUrl(it) }?.takeIf { it.startsWith("http") }
+        siteOrigin = refererOrigin ?: DEFAULT_SITE_ORIGIN
+        Log.d(TAG, "=== START extract code=$code referer=$referer siteOrigin=$siteOrigin ===")
 
         // Step 0: structural fingerprint.
         // The embed API does not verify the ES256 signature — a well-formed
@@ -378,12 +420,16 @@ class YstreamExtractor : ExtractorApi() {
         val fpObj = fingerprint()
 
         // Step 1: get embed frame URL from details endpoint.
-        // The API host rotates per video, so always start from the site origin
-        // and read the live host out of embed_frame_url.
+        // The API host rotates per video, so ask the host we were handed by
+        // the iframe and read the live host out of embed_frame_url. The
+        // pinned siteOrigin would answer too, but the embed host is the one
+        // that actually carries the code.
+        val embedHost = getBaseUrl(url)
+        apiBase = embedHost
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$siteOrigin/api/videos/$code/embed/details", detailsHeaders)
+        val detailsRaw = httpGet("$embedHost/api/videos/$code/embed/details", detailsHeaders)
         if (detailsRaw.isNullOrBlank()) {
-            Log.e(TAG, "details: empty response for code=$code")
+            Log.e(TAG, "details: empty response for code=$code host=$embedHost")
             return
         }
         Log.d(TAG, "details raw (${detailsRaw.length} B): ${detailsRaw.take(400)}")
