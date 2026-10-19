@@ -412,7 +412,8 @@ object MovieBoxV2Shared {
                     cleanTitle == normalized -> 0
                     cleanTitle.startsWith(normalized) -> 1
                     cleanTitle.contains(normalized) -> 2
-                    normalized.contains(cleanTitle) -> 3
+                    normalized.contains(cleanTitle) &&
+                        cleanTitle.length * 5 >= normalized.length * 3 -> 3
                     else -> -1
                 }
                 if (rank < 0) continue

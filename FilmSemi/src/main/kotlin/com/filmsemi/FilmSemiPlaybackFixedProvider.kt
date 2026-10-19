@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Interceptor
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -36,6 +37,7 @@ class FilmSemiPlaybackFixedProvider : FilmSemi() {
         private const val GRACE_POLL_MS = 75L
         private const val TARGET_SOURCE_COUNT = 3
         private const val FINAL_SETTLE_MS = 250L
+        private const val SUBTITLE_WAIT_MS = 5_000L
     }
 
     private fun sourceKey(link: ExtractorLink): String {
@@ -171,6 +173,25 @@ class FilmSemiPlaybackFixedProvider : FilmSemi() {
         val sourceKeys = ConcurrentHashMap.newKeySet<String>()
         val forward = graceForwarder(emitted, firstReady, sourceKeys, callback)
 
+        val subtitleJob = launch {
+            try {
+                val payload = JSONObject(data)
+                val title = stringOrNull(payload, "title") ?: return@launch
+                FilmSemiSubtitles.emit(
+                    title = title,
+                    year = intOrNull(payload, "airedYear") ?: intOrNull(payload, "year"),
+                    season = intOrNull(payload, "season"),
+                    episode = intOrNull(payload, "episode"),
+                    tmdbId = intOrNull(payload, "id"),
+                    imdbId = stringOrNull(payload, "imdbId"),
+                    subtitleCallback = subtitleCallback
+                )
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                Log.e("FilmSemi", "[SUB] ${error.javaClass.simpleName}: ${error.message}")
+            }
+        }
+
         val loaderJob = launch {
             try {
                 loadAllSources(data, subtitleCallback, forward)
@@ -185,6 +206,7 @@ class FilmSemiPlaybackFixedProvider : FilmSemi() {
         val ready = firstReady.await()
         if (!ready) {
             loaderJob.join()
+            subtitleJob.cancel()
             return@supervisorScope false
         }
 
@@ -197,6 +219,9 @@ class FilmSemiPlaybackFixedProvider : FilmSemi() {
 
         if (loaderJob.isActive && sourceKeys.size >= TARGET_SOURCE_COUNT) delay(FINAL_SETTLE_MS)
         if (loaderJob.isActive) loaderJob.cancelAndJoin()
+
+        withTimeoutOrNull(SUBTITLE_WAIT_MS) { subtitleJob.join() }
+        if (subtitleJob.isActive) subtitleJob.cancel()
 
         Log.i("FilmSemi", "[THREE-SOURCE] release-player|LINKS=${emitted.get()}|FAMILIES=${sourceKeys.joinToString(",")}")
         emitted.get() > 0

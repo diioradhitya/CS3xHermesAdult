@@ -138,7 +138,11 @@ object FilmSemiIdlix {
      */
     private suspend fun fetchIdx(url: String): IdxFetch {
         return try {
-            val response = app.get(url)
+            val response = app.get(url, headers = mapOf(
+                "User-Agent" to UA,
+                "Accept" to "application/json, text/plain, */*",
+                "Referer" to MAIN_URL
+            ))
             val text = response.text
             val payload = if (text.trimStart().startsWith("[")) "{\"data\":$text}" else text
             val parsed = AppUtils.parseJson<IdxSearchResponse>(payload)
@@ -167,7 +171,7 @@ object FilmSemiIdlix {
             val score = when {
                 c == cq -> 0
                 c.contains(cq) && cq.length * 10 >= c.length * 6 -> 1
-                cq.contains(c) && c.length >= 6 && c.length * 10 >= cq.length * 6 -> 2
+                cq.contains(c) && c.length >= 4 && c.length * 10 >= cq.length * 6 -> 2
                 else -> continue
             }
             val b = best
@@ -200,6 +204,17 @@ object FilmSemiIdlix {
                 .filter { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
                 .distinct()
             Log.d(IDX_TAG, "[1-MULAI] title=$title org=$orgTitle alt=$altTitle year=$year s=$season e=$episode")
+
+            // Pancing CookieJar + Cloudflare sebelum request pertama (search/detail juga
+            // bisa diblokir, bukan hanya play-info).
+            runCatching {
+                app.get(MAIN_URL, headers = mapOf(
+                    "User-Agent" to UA,
+                    "Accept" to "text/html,application/xhtml+xml",
+                    "Referer" to MAIN_URL
+                ))
+            }
+            delay(PROBE_GAP_MS)
 
             // ---------- 1. SEARCH ----------
             // Endpoint lama /api/search?q= ternyata mengembalikan daftar film
@@ -273,6 +288,14 @@ object FilmSemiIdlix {
                     )
                     continue
                 }
+                if (fetch.items.isNotEmpty() &&
+                    fetch.items.none { rank(it.title, queries) != null || rank(it.originalTitle, queries) != null }) {
+                    Log.d(
+                        IDX_TAG,
+                        "[2-SEARCH] '$q' http=${fetch.code} -> ${fetch.items.size} item, 0 cocok judul, diabaikan"
+                    )
+                    continue
+                }
                 sawRealHit = true
                 fetch.items.forEach { item ->
                     val slug = item.slug ?: return@forEach
@@ -323,7 +346,11 @@ object FilmSemiIdlix {
                 val slug = item.slug ?: continue
                 val apiUrl = "$MAIN_URL/api/${if (wantSeries) "series" else "movies"}/$slug"
                 val detail = runCatching {
-                    AppUtils.parseJson<IdxDetail>(app.get(apiUrl).text)
+                    AppUtils.parseJson<IdxDetail>(app.get(apiUrl, headers = mapOf(
+                        "User-Agent" to UA,
+                        "Accept" to "application/json, text/plain, */*",
+                        "Referer" to MAIN_URL
+                    )).text)
                 }.getOrNull() ?: continue
 
                 val detailId = detail.id ?: slug
@@ -366,7 +393,11 @@ object FilmSemiIdlix {
                 val epNum = episode ?: return
                 val seasonUrl = "$MAIN_URL/api/series/$slug/season/$seasonNum"
                 val parsedSeason = runCatching {
-                    AppUtils.parseJson<IdxSeasonResponse>(app.get(seasonUrl).text)
+                    AppUtils.parseJson<IdxSeasonResponse>(app.get(seasonUrl, headers = mapOf(
+                        "User-Agent" to UA,
+                        "Accept" to "application/json, text/plain, */*",
+                        "Referer" to MAIN_URL
+                    )).text)
                 }.getOrNull()
 
                 val ep = parsedSeason?.season?.episodes
