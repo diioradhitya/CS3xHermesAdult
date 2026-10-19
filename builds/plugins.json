@@ -329,5 +329,42 @@
     "tvTypes": [
       "NSFW"
     ]
+  },
+  {
+    "iconUrl": "https://www.milfed.com/favicon.ico",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 25117,
+    "fileHash": "sha256-d3b5782383048dec70233404d9a3a430e64add77768f43180af00f1482776cb5",
+    "status": 2,
+    "name": "Milfed",
+    "description": "Milfed \u2014 Mature Milf Porn Videos",
+    "version": 1,
+    "tags": [
+      "adult",
+      "milf",
+      "NSFW"
+    ],
+    "authors": [
+      "Dio R"
+    ],
+    "language": "id",
+    "compatibilitySdkVersion": 33,
+    "advancedLog": false,
+    "hasSettings": false,
+    "bundledJS": null,
+    "pluginClassName": "com.milfed.MilfedProviderPlugin",
+    "internalName": "MilfedProvider",
+    "allowedDomains": [
+      "milfed.com",
+      "www.milfed.com",
+      "site-api.project1service.com",
+      "media-public-ht.project1content.com",
+      "prog-public-ht.project1content.com"
+    ],
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/MilfedProvider.cs3",
+    "tvTypes": [
+      "NSFW"
+    ]
   }
 ]
