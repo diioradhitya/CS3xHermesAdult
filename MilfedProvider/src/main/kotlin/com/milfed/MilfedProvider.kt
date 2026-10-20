@@ -286,20 +286,27 @@ class MilfedProvider(context: Context? = null) : MainAPI() {
         val referer = "${MilfedApi.site}/scene/$id"
         var emitted = 0
         for ((key, file) in ordered) {
-            // A member session gets the whole file: the site puts it in
-            // "downloadUrl" and leaves the 20 second trailer in "urls.view".
-            // An anonymous session has no downloadUrl at all, so the trailer
-            // is the only thing there is.
-            val full = file.downloadUrl?.takeIf { it.startsWith("http") }
-            val preview = file.urls["view"]?.takeIf { it.startsWith("http") }
-                ?: file.urls["download"]?.takeIf { it.startsWith("http") }
-                ?: file.urls.values.firstOrNull { it.startsWith("http") }
-            val url = full ?: preview ?: continue
-            val isFull = full != null
+            // A member session gets the whole file, but where the site puts it
+            // is not something to guess: its own player only ever plays
+            // "urls.view", while its download menu uses "downloadUrl". Either
+            // of the two can be the full file, and the response does not say
+            // which. So every candidate is measured and the biggest one wins.
+            // An anonymous session has only the 20 second trailer, so the
+            // trailer is what gets picked there.
+            val candidates = listOfNotNull(
+                file.urls["view"],
+                file.downloadUrl,
+                file.urls["download"],
+                file.urls.values.firstOrNull { it.startsWith("http") }
+            ).filter { it.startsWith("http") }.distinct()
+            if (candidates.isEmpty()) continue
+            val url = MilfedApi.pickLargest(candidates) ?: candidates.first()
+            val measured = MilfedApi.measure(url)
+            val isFull = measured != null && measured > 40_000_000L
             val label = if (isFull) "Milfed $key" else "Milfed $key (preview)"
             Log.d(
                 TAG,
-                "loadLinks: $label -> ${file.sizeBytes / 1024} KB" +
+                "loadLinks: $label -> ${(measured ?: file.sizeBytes) / 1024} KB" +
                     " cdn=${file.multiCdnId ?: book?.multiCdnId}" +
                     " length=${book?.length}s" +
                     (if (isFull) " (full file)" else " (trailer only - a member session is needed for the full video)")

@@ -189,6 +189,61 @@ internal object MilfedApi {
         return null
     }
 
+    /**
+     * The size of a media url in bytes, or null when it cannot be measured.
+     *
+     * The site does not say which of "urls.view" and "downloadUrl" is the
+     * whole file - the two are different CDN paths - so the answer has to be
+     * measured, and it has to be measured without downloading anything.
+     *
+     * A range request for a single byte does that: the server answers 206
+     * with `Content-Range: bytes 0-0/<total>`, which carries the size of the
+     * whole file. If the server ignores the range and answers 200, the
+     * Content-Length is the total and the body is never read, so nothing is
+     * downloaded either way.
+     */
+    fun measure(url: String): Long? {
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Range", "bytes=0-0")
+                .header("User-Agent", UA)
+                .header("Referer", "$site/scenes")
+                .build()
+            client.newCall(request).execute().use { response ->
+                val range = response.header("Content-Range")
+                val total = range?.substringAfter('/', "")?.substringBefore('*')?.trim()?.toLongOrNull()
+                val len = total ?: response.header("Content-Length")?.toLongOrNull()
+                Log.d(TAG, "measure $url -> ${response.code} len=$len")
+                len
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "measure $url failed: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * The biggest of the candidate urls, by measured size.
+     *
+     * Falls back to the first candidate when none of them can be measured, so
+     * a CDN that refuses HEAD does not break playback.
+     */
+    fun pickLargest(candidates: List<String>): String? {
+        if (candidates.isEmpty()) return null
+        var best: String? = null
+        var bestSize = -1L
+        for (candidate in candidates) {
+            val size = measure(candidate) ?: continue
+            if (size > bestSize) {
+                bestSize = size
+                best = candidate
+            }
+        }
+        return best ?: candidates.first()
+    }
+
     /** The "meta" block of an envelope, or null. */
     private fun metaOf(tree: JsonNode?): MilfedMeta? {
         val node = tree?.get("meta") ?: return null
