@@ -1,5 +1,6 @@
 package com.milfed
 
+import android.content.Context
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
@@ -36,8 +37,21 @@ import com.lagradost.cloudstream3.utils.ExtractorLinkType
  * videos array and a cover instead of a poster, so there is nothing to play
  * and they are not listed here.
  */
-class MilfedProvider : MainAPI() {
-    override var mainUrl = MilfedApi.SITE
+class MilfedProvider(context: Context? = null) : MainAPI() {
+    init {
+        // The stored member session decides whether the API hands over the
+        // full video or the 20 second preview.
+        context?.let { ctx ->
+            val stored = ctx.getSharedPreferences("milfed", Context.MODE_PRIVATE)
+                .getString("session", null)
+            if (!stored.isNullOrBlank()) {
+                MilfedApi.memberSession = stored
+                Log.d(TAG, "member session loaded (${stored.length} chars)")
+            }
+        }
+    }
+
+    override var mainUrl = MilfedApi.site
     override var name = "Milfed"
     override var lang = "id"
     override val hasMainPage = true
@@ -254,7 +268,8 @@ class MilfedProvider : MainAPI() {
             return false
         }
 
-        val files = release.preview()?.files ?: emptyMap()
+        val book = release.preview()
+        val files = book?.files ?: emptyMap()
         if (files.isEmpty()) {
             Log.e(TAG, "loadLinks: release $id has no playable file")
             return false
@@ -268,15 +283,31 @@ class MilfedProvider : MainAPI() {
                 files.entries.sortedByDescending { it.value.sizeBytes }.map { it.key to it.value }
             }
 
-        val referer = "${MilfedApi.SITE}/scene/$id"
+        val referer = "${MilfedApi.site}/scene/$id"
         var emitted = 0
         for ((key, file) in ordered) {
-            val url = file.urls["view"] ?: file.urls.values.firstOrNull() ?: continue
-            if (!url.startsWith("http")) continue
+            // A member session gets the whole file: the site puts it in
+            // "downloadUrl" and leaves the 20 second trailer in "urls.view".
+            // An anonymous session has no downloadUrl at all, so the trailer
+            // is the only thing there is.
+            val full = file.downloadUrl?.takeIf { it.startsWith("http") }
+            val preview = file.urls["view"]?.takeIf { it.startsWith("http") }
+                ?: file.urls["download"]?.takeIf { it.startsWith("http") }
+                ?: file.urls.values.firstOrNull { it.startsWith("http") }
+            val url = full ?: preview ?: continue
+            val isFull = full != null
+            val label = if (isFull) "Milfed $key" else "Milfed $key (preview)"
+            Log.d(
+                TAG,
+                "loadLinks: $label -> ${file.sizeBytes / 1024} KB" +
+                    " cdn=${file.multiCdnId ?: book?.multiCdnId}" +
+                    " length=${book?.length}s" +
+                    (if (isFull) " (full file)" else " (trailer only - a member session is needed for the full video)")
+            )
             callback(
                 newExtractorLink(
-                    "Milfed $key",
-                    "Milfed $key",
+                    label,
+                    label,
                     url,
                     ExtractorLinkType.VIDEO
                 ) {

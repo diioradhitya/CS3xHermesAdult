@@ -34,8 +34,40 @@ import java.util.concurrent.TimeUnit
 internal object MilfedApi {
     private const val TAG = "MilfedApi"
 
-    const val SITE = "https://www.milfed.com"
-    const val API = "https://site-api.project1service.com"
+    /**
+     * The site and the catalogue API. They are `var` so the live test can
+     * point them at a local mock server - the real hosts are the defaults.
+     */
+    @Volatile
+    var site: String = "https://www.milfed.com"
+
+    @Volatile
+    var api: String = "https://site-api.project1service.com"
+
+    /**
+     * The member session, as the cookie string the browser shows, e.g.
+     *
+     *   instance_token=eyJ...; app_session_id=6d6eda9c-...; __s=Ab3...
+     *
+     * The site hands out the full file only to a member session, so this is
+     * what turns the 20 second preview into the whole video. It is the
+     * user's own session - the plugin never creates or guesses one.
+     */
+    @Volatile
+    var memberSession: String? = null
+
+    /** The instance token of the member session, if the session carries one. */
+    private fun sessionValue(name: String): String? {
+        val raw = memberSession ?: return null
+        raw.split(';').forEach { part ->
+            val kv = part.trim().split('=')
+            if (kv.size >= 2 && kv[0].trim() == name) {
+                val value = kv.drop(1).joinToString("=").trim()
+                if (value.isNotBlank()) return value
+            }
+        }
+        return null
+    }
 
     private const val UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -59,10 +91,16 @@ internal object MilfedApi {
      */
     @Synchronized
     private fun ensureToken(): String? {
+        // A member session carries its own instance token, and that is the
+        // one the API has to see for the session to count.
+        sessionValue("instance_token")?.let {
+            Log.d(TAG, "using the instance token from the member session")
+            return it
+        }
         instanceToken?.let { return it }
 
         val request = Request.Builder()
-            .url("$SITE/scenes")
+            .url("$site/scenes")
             .header("User-Agent", UA)
             .header("Accept", "text/html,application/xhtml+xml")
             .build()
@@ -105,7 +143,7 @@ internal object MilfedApi {
         val query = params.entries.joinToString("&") { (k, v) ->
             "$k=${java.net.URLEncoder.encode(v, "UTF-8")}"
         }
-        val url = if (query.isEmpty()) "$API$path" else "$API$path?$query"
+        val url = if (query.isEmpty()) "$api$path" else "$api$path?$query"
 
         var token = ensureToken()
         if (token == null) return null
@@ -115,8 +153,15 @@ internal object MilfedApi {
                 .url(url)
                 .header("User-Agent", UA)
                 .header("Accept", "application/json")
-                .header("Referer", "$SITE/scenes")
+                .header("Referer", "$site/scenes")
                 .header("Instance", token!!)
+                .apply {
+                    // The member session identifies the account. The SPA sends
+                    // the app session id as its own header and the cookies
+                    // alongside it.
+                    sessionValue("app_session_id")?.let { header("X-APP-SESSION-ID", it) }
+                    memberSession?.let { header("Cookie", it) }
+                }
                 .build()
 
             try {
@@ -377,11 +422,19 @@ internal class MilfedImages {
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 internal class MilfedMediabook {
+    /**
+     * The runtime of the whole video in seconds. A preview file is a couple
+     * of megabytes for a 40 minute scene, so this is what says how much is
+     * actually there.
+     */
     @JsonProperty("length")
     var length: Int = 0
 
     @JsonProperty("files")
     var files: Map<String, MilfedFile> = emptyMap()
+
+    @JsonProperty("multiCdnId")
+    var multiCdnId: String? = null
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -394,4 +447,20 @@ internal class MilfedFile {
 
     @JsonProperty("urls")
     var urls: Map<String, String> = emptyMap()
+
+    /**
+     * The full file. The site's own download menu filters on exactly this
+     * field - `files.filter(e => e.downloadUrl && ...)` - and an anonymous
+     * response has no `downloadUrl` at all, only `urls.view` pointing at the
+     * 20 second trailer.
+     */
+    @JsonProperty("downloadUrl")
+    var downloadUrl: String? = null
+
+    /** "standardTrailersCdn" for a preview; a different id for the full file. */
+    @JsonProperty("multiCdnId")
+    var multiCdnId: String? = null
+
+    @JsonProperty("type")
+    var type: String? = null
 }
