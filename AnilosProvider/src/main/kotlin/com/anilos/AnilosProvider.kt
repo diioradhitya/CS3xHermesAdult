@@ -53,7 +53,7 @@ class AnilosProvider : MainAPI() {
         repeat(attempts) { attempt ->
             try {
                 val doc = app.get(url, headers = mapOf("User-Agent" to userAgent)).document
-                if (doc.select("h1, .video-wrapper, .video-container, article").isNotEmpty()) {
+                if (doc.select("h1, .video-wrapper, .video-container, article, .content-grid").isNotEmpty()) {
                     if (attempt > 0) Log.d(TAG, "fetch ok on attempt ${attempt + 1} for $url")
                     return doc
                 }
@@ -68,7 +68,7 @@ class AnilosProvider : MainAPI() {
     }
 
     private fun Element.toSearch(): SearchResponse? {
-        val link = selectFirst("a[href*=/video/watch/], a[href*=/video/]") ?: return null
+        val link = selectFirst("a[href*=/video/watch/]") ?: return null
         val href = link.attr("href").ifBlank { return null }
         val title = link.attr("title").ifBlank {
             selectFirst("img")?.attr("alt")?.ifBlank { link.text() } ?: link.text()
@@ -86,7 +86,8 @@ class AnilosProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = pageUrl(request.data, page)
         val doc = fetchDocument(url) ?: return newHomePageResponse(request.name, emptyList())
-        val items = doc.select("article.post, div.video-item, div.video-item-wrap, div.thumb-item").mapNotNull { it.toSearch() }
+        // Anilos uses .content-grid-item for video items
+        val items = doc.select(".content-grid-item").mapNotNull { it.toSearch() }
         Log.d(TAG, "page $page -> ${items.size} items, ${items.count { !it.posterUrl.isNullOrBlank() }} with poster")
         return newHomePageResponse(request.name, items)
     }
@@ -94,7 +95,7 @@ class AnilosProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val url = "$mainUrl/search?q=${URLEncoder.encode(query, "UTF-8")}"
         val doc = fetchDocument(url) ?: return emptyList()
-        return doc.select("article.post, div.video-item, div.thumb-item").mapNotNull { it.toSearch() }
+        return doc.select(".content-grid-item").mapNotNull { it.toSearch() }
     }
 
     override suspend fun load(url: String): LoadResponse? {
