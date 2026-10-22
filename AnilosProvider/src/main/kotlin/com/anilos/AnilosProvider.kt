@@ -38,11 +38,11 @@ class AnilosProvider : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainPageBase" to "Latest",
-        "$mainPageBase?orderby=date&order=desc" to "Recent",
-        "$mainPageBase?orderby=title&order=asc" to "A - Z",
-        "$categoryBase" to "Categories",
-        "$mainPageBase?orderby=rand" to "Random",
+        "$mainUrl/video/recent" to "Recent",
+        "$mainUrl/video/toprated" to "Top Rated",
+        "$mainUrl/video/trending" to "Trending",
+        "$mainUrl/video/alpha" to "A - Z",
+        "$mainUrl/video/random" to "Random",
     )
 
     private fun pageUrl(base: String, page: Int): String {
