@@ -47,16 +47,28 @@ class AnilosProvider : MainAPI() {
                     "Sec-Fetch-Mode" to "navigate",
                     "Sec-Fetch-Site" to "none",
                     "Sec-Fetch-User" to "?1",
-                    "Cache-Control" to "max-age=0"
+                    "Cache-Control" to "max-age=0",
+                    "Sec-Ch-Ua" to "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+                    "Sec-Ch-Ua-Mobile" to "?0",
+                    "Sec-Ch-Ua-Platform" to "\"Windows\""
                 )).document
-                if (doc.select("h1, .video-wrapper, .video-container, article, .content-grid").isNotEmpty()) return doc
                 val html = doc.html()
-                if (html.contains("challenge") || html.contains("cf-mitigated") || html.contains("cf-challenge")) {
-                    android.util.Log.w("Anilos", "Cloudflare challenge detected for $url")
+                val isChallenge = html.contains("challenge") || html.contains("cf-mitigated") || html.contains("cf-challenge") || html.contains("Security Check") || html.contains("Just a moment")
+                if (isChallenge) {
+                    android.util.Log.w("Anilos", "Cloudflare challenge detected for $url (attempt ${attempt + 1})")
+                    if (attempt >= 2) return null
+                    delay(2000L)
+                } else if (doc.select("h1, .video-wrapper, .video-container, article, .content-grid, .content-grid-item").isNotEmpty()) {
+                    return doc
+                } else {
+                    android.util.Log.w("Anilos", "fetch attempt ${attempt + 1}/3 got empty/invalid document for $url")
                 }
-            } catch (e: Exception) {}
-            delay(500)
+            } catch (e: Exception) {
+                android.util.Log.w("Anilos", "fetch attempt ${attempt + 1}/3 failed for $url: ${e.message}")
+            }
+            delay(1000L * (attempt + 1))
         }
+        android.util.Log.e("Anilos", "fetch gave up after 3 attempts for $url")
         return null
     }
 
