@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.strAfter
 import org.json.JSONObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -126,35 +125,31 @@ public class MovieBoxProvider : MainAPI() {
 
         // Try API for movie/anime first
         when (platform) {
-            "movie" -> {
-                getPlayUrl(id, params)?.let { url ->
-                    callback(newExtractorLink("MovieBox", id, url, ExtractorLinkType.VIDEO) {
-                        this.referer = REFERER
-                        this.quality = BEST_QUALITY
-                    })
-                    return true
-                }
-                // Fallback: try page parsing if API fails
-                return tryPageExtraction(pageUrl, id, callback)
-            }
-            "anime" -> {
-                getPlayUrl(id, params)?.let { url ->
-                    callback(newExtractorLink("MovieBox", id, url, ExtractorLinkType.VIDEO) {
-                        this.referer = REFERER
-                        this.quality = BEST_QUALITY
-                    })
-                    return true
-                }
-                // Fallback: try page parsing if API fails
-                return tryPageExtraction(pageUrl, id, callback)
-            }
-            else -> {
-                return tryPageExtraction(pageUrl, id, callback)
-            }
+            "movie" -> return tryGetLink(id, params, pageUrl, callback)
+            "anime" -> return tryGetLink(id, params, pageUrl, callback)
+            else -> return tryPageExtraction(pageUrl, id, callback)
         }
     }
 
-    private fun tryPageExtraction(pageUrl: String, id: String, callback: (ExtractorLink) -> Unit): Boolean {
+    private suspend fun tryGetLink(
+        id: String,
+        params: Map<String, String>,
+        pageUrl: String,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val url = getPlayUrl(id, params)
+        if (url != null) {
+            val link = newExtractorLink("MovieBox", id, url, ExtractorLinkType.VIDEO) {
+                this.referer = REFERER
+                this.quality = BEST_QUALITY
+            }
+            callback(link)
+            return true
+        }
+        return tryPageExtraction(pageUrl, id, callback)
+    }
+
+    private suspend fun tryPageExtraction(pageUrl: String, id: String, callback: (ExtractorLink) -> Unit): Boolean {
         val pageData = getText(pageUrl, "https://movieboxfilm.com/") ?: return false
         val playerId = strAfter(pageData, "playerId")?.substringBefore("\"") ?: return false
         val playData = strAfter(pageData, "playData")?.substringBefore("\"") ?: return false

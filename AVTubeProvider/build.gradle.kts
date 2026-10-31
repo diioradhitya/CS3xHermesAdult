@@ -1,0 +1,12 @@
+version = 15
+
+cloudstream {
+    authors     = listOf("Dio R")
+    language    = "id"
+    description = "AVTube — Indonesian adult streaming with HD video"
+
+    /**
+     * Status int as string: "1" = beta, "2" = working, "3" = broken
+     */
+    status = 2
+}
