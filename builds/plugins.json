@@ -285,5 +285,26 @@
     "tvTypes": [
       "NSFW"
     ]
+  },
+  {
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/MovieboxProvider.cs3",
+    "status": 2,
+    "version": 2,
+    "name": "MovieBox",
+    "internalName": "MovieBoxProvider",
+    "authors": [
+      "Dio R"
+    ],
+    "description": "MovieBox - Movie streaming from movieboxfilm.com",
+    "fileSize": 11359,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "language": "id",
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "iconUrl": "https://movieboxfilm.com/favicon.ico",
+    "apiVersion": "1",
+    "fileHash": "sha256-014546add9013d32652131cd134792559c0f5998be9170e8bf3a9938c4bfbd22"
   }
 ]
