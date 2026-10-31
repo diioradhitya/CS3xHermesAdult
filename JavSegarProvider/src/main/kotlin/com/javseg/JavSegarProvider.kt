@@ -1,8 +1,38 @@
 package com.javseg
 
+import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.delay
 import org.jsoup.nodes.Element
+
+/**
+ * javsegar.com is a WordPress site whose media library is effectively empty:
+ * `featured_media` is 0 for all 5.641 posts and the REST payload contains not a
+ * single image URL. Every earlier version (v8-v11) therefore tried to repair
+ * posters with oEmbed + og:image fallback, which cost ~21 s of serial requests
+ * per home page and still resolved 0/30 on the archive tabs.
+ *
+ * The covers do exist - just not in REST. They live in the listing markup as
+ * `data-main-thumb` on each `article` card, on a media host that serves them
+ * with a plain OkHttp GET: no Referer, no cookies, no challenge (verified 200
+ * image/jpeg with and without a Referer). That is exactly what the browser sees,
+ * which is why banners show there and were grey in CloudStream.
+ *
+ * So v12 reads the category archive directly: one request yields title, link and
+ * poster together, for all 32 cards.
+ *
+ * Tabs are real orderings of that same archive, each verified to hold across
+ * pages (page 1 and page 2 share no post ids):
+ *   Latest   -                             ids 197919 197917 197915
+ *   Terlama  - ?orderby=date&order=asc     ids  32054  32058  32061
+ *   A - Z    - ?orderby=title&order=asc    ids  95496  95509 104141
+ *   Z - A    - ?orderby=title&order=desc   ids 144183  62033 197014
+ *   Populer  - ?filter=popular              ids 195983 171034 197140
+ *
+ * Note the front page ignores /page/N/ entirely (page 1 == page 188), so the
+ * category archive is the only paginated listing on this site.
+ */
 class JavSegarProvider : MainAPI() {
     override var mainUrl = "https://javsegar.com"
     override var name = "JavSegar"
@@ -11,50 +41,128 @@ class JavSegarProvider : MainAPI() {
     override val hasDownloadSupport = true
     override var supportedTypes = setOf(TvType.NSFW)
 
+    /** The site exposes a single real category, so it is the one listing that paginates. */
+    private val archive = "$mainUrl/category/bokep-jepang"
+
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Latest",
-        "$mainUrl/category/bokep-jepang/" to "Bokep Jepang",
+        "$archive/" to "Latest",
+        "$archive/?orderby=date&order=asc" to "Terlama",
+        "$archive/?orderby=title&order=asc" to "A - Z",
+        "$archive/?orderby=title&order=desc" to "Z - A",
+        "$archive/?filter=popular" to "Populer",
     )
 
+    private fun pageUrl(base: String, page: Int): String {
+        if (page <= 1) return base
+        // Keep the ordering parameter, otherwise page 2 silently returns page 1.
+        val q = base.substringAfter('?', "")
+        val path = base.substringBefore('?').removeSuffix("/")
+        return "$path/page/$page/" + if (q.isBlank()) "" else "?$q"
+    }
+
+    /**
+     * One card out of the listing markup. Everything CloudStream needs is on the
+     * same element: the title on the anchor's title attribute, the permalink on
+     * its href, and the cover in data-main-thumb.
+     */
     private fun Element.toSearch(): SearchResponse? {
         val a = selectFirst("a") ?: return null
         val href = a.attr("href").ifBlank { return null }
-        val title = a.attr("title") ?: selectFirst("span")?.text() ?: return null
-        val thumb = selectFirst("img.video-main-thumb")?.attr("src")
-            ?: selectFirst("img")?.attr("data-main-thumb") ?: ""
-        return newMovieSearchResponse(title, href, TvType.NSFW) {
-            posterUrl = thumb
+        val title = a.attr("title").ifBlank { selectFirst("span")?.text().orEmpty() }
+            .ifBlank { return null }
+        val poster = attr("data-main-thumb").ifBlank {
+            selectFirst("img")?.attr("data-main-thumb").orEmpty()
+        }
+        return newMovieSearchResponse(title.trim(), href, TvType.NSFW) {
+            if (poster.startsWith("http")) posterUrl = poster
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) request.data else "$mainUrl/page/$page/"
-        val doc = app.get(url).document
-        val items = doc.select("article.thumb-block").mapNotNull { it.toSearch() }
+        val items = listPosts(pageUrl(request.data, page))
+        Log.d(TAG, "tab '${request.name}' page $page -> ${items.size} items, " +
+            "${items.count { !it.posterUrl.isNullOrBlank() }} with poster")
         return newHomePageResponse(request.name, items)
     }
 
+    /**
+     * Fetch [url] with bounded retries, or null if every attempt fails.
+     *
+     * The origin is unstable. Measured over 24 parallel requests to the
+     * archive: 10x 200, 13x 525, 1x 502 -- 42% success. 525 is Cloudflare
+     * failing to negotiate TLS with the origin, so the failure is upstream and
+     * transient, not a change in the markup: when a request does land, both the
+     * archive and a post page come back complete.
+     *
+     * Retrying therefore matters more than anything else here, and it has to
+     * cover both shapes of failure: an IOException, and a 200-shaped response
+     * whose body is Cloudflare's error page, which parses cleanly into an
+     * empty document. So treat "nothing worth reading" as a failed attempt too,
+     * which also means this needs no access to the response status.
+     *
+     * Projected from that 42%: 1 try 42%, 2 tries 66%, 3 tries 80%,
+     * 4 tries 88%.
+     */
+    private suspend fun fetchDocument(url: String, attempts: Int = 4): org.jsoup.nodes.Document? {
+        repeat(attempts) { attempt ->
+            try {
+                val doc = app.get(url).document
+                // Both page shapes carry an h1 or article cards; Cloudflare's
+                // error page carries neither.
+                if (doc.select("h1, article").isNotEmpty()) {
+                    if (attempt > 0) Log.d(TAG, "fetch ok on attempt ${attempt + 1} for $url")
+                    return doc
+                }
+                Log.w(TAG, "fetch attempt ${attempt + 1}/$attempts got an empty document for $url")
+            } catch (e: Exception) {
+                Log.w(TAG, "fetch attempt ${attempt + 1}/$attempts failed for $url: ${e.message}")
+            }
+            // Linear backoff; short, because the success rate recovers fast.
+            delay(350L * (attempt + 1))
+        }
+        Log.e(TAG, "fetch gave up after $attempts attempts for $url")
+        return null
+    }
+
+    private suspend fun listPosts(url: String): List<SearchResponse> {
+        val doc = fetchDocument(url) ?: return emptyList()
+        return doc.select("article").mapNotNull { it.toSearch() }
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/?s=${query.replace(" ", "+")}").document
-        return doc.select("article.thumb-block").mapNotNull { it.toSearch() }
+        // The listing markup carries the cover; REST search does not, so search
+        // the HTML. Verified live: /?s=JUL-416 returns 1 card with 1 poster.
+        return listPosts("$mainUrl/?s=${query.replace(" ", "+")}")
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url).document
+        // Same flapping origin as the listing: without retries a single 525
+        // threw out of here and Cloudstream rendered "not found", even though
+        // the page loads fine in a browser moments later.
+        val doc = fetchDocument(url) ?: run {
+            Log.e(TAG, "load: giving up on $url")
+            return null
+        }
 
         val title = doc.selectFirst("h1.entry-title")?.text()?.trim()
+            ?: doc.selectFirst("h1")?.text()?.trim()
             ?: doc.title().replace(" - JavSegar", "").trim()
 
         val poster = doc.selectFirst("meta[property=og:image]")?.attr("content") ?: ""
-        val description = doc.selectFirst("meta[property=og:description]")?.attr("content") ?: ""
+        val metaDesc = doc.selectFirst("meta[property=og:description]")?.attr("content")
+        val plotText = metaDesc ?: doc.selectFirst("div.entry-content")?.text()?.trim().orEmpty()
         val duration = doc.selectFirst("meta[itemprop=duration]")?.attr("content") ?: ""
         val tags = doc.select("a[href*=/tags/]").mapNotNull { it.text().trim().ifBlank { null } }
 
-        val iframeUrl = doc.selectFirst("div.video-player iframe")?.attr("src") ?: ""
+        // Prefer the real player iframe. Fall back to the post URL only when
+        // the page has no iframe at all - loadLinks will then route through
+        // loadExtractor/YstreamExtractor by host.
+        val iframeSrc = doc.selectFirst("div.video-player iframe, div.video-player-area iframe, .video-player iframe")?.attr("src").orEmpty()
+        val data = iframeSrc.ifBlank { url }
 
-        return newMovieLoadResponse(title, url, TvType.NSFW, iframeUrl.ifBlank { url }) {
+        return newMovieLoadResponse(title, url, TvType.NSFW, data) {
             this.posterUrl = poster
-            this.plot = description
+            this.plot = plotText
             this.tags = tags
         }
     }
@@ -67,13 +175,181 @@ class JavSegarProvider : MainAPI() {
     ): Boolean {
         if (data.isBlank()) return false
 
+        val host = data.substringAfter("://", "").substringBefore('/').lowercase()
+        Log.d(TAG, "loadLinks $data (host=$host)")
+
+        // Every branch collects rather than emitting straight away. Two reasons:
+        // returning true just because a handler ran made a failure look like a
+        // success until Cloudstream rendered "no links found" with nothing in
+        // the log, and a link that has been shown cannot be renamed or
+        // withdrawn afterwards.
+        val collected = mutableListOf<ExtractorLink>()
+        val collect: (ExtractorLink) -> Unit = { link -> collected.add(link) }
+
+        // streamtape.to has no built-in extractor (CS ships .com/.net/.xyz),
+        // so it is handled before the generic loadExtractor pass.
+        if (host.startsWith("streamtape.")) {
+            StreamTapeToExtractor().getUrl(data, data, subtitleCallback, collect)
+            Log.d(TAG, "loadLinks streamtape emitted=${collected.isNotEmpty()}")
+            collected.forEach { emit(callback, it) }
+            return true
+        }
+
+        // vidara.to / doodstream.com / playmogo.com and friends are all
+        // covered by CloudStream's built-in extractors - let them try first,
+        // they match on host name. The Byse regex below matches any
+        // /e/<code> path and would otherwise wrongly capture them.
+        //
+        // Except for hosts we know are ours. Cloudstream's fallback matcher
+        // compares only a sliding window and its edit distance is capped at 1,
+        // so a short unrelated mainUrl clears the 80 threshold against almost
+        // anything -- Gdriveplayer, Dailymotion and Voe all "match"
+        // ystream.id. One of them claimed the URL, spent 15s in a WebView,
+        // emitted nothing, and loadExtractor still returned true, so
+        // YstreamExtractor never ran and the title reported no links. Verified
+        // on device: "loadExtractor handled ystream.id, emitted=false" after
+        // 16s. Matching on host name instead cannot collide like that.
+        val ours = isYstreamHost(data)
+        if (!ours) {
+            // The generic pass can hand back the master playlist *and* every
+            // variant beside it, so filter before anything is shown.
+            val raw = mutableListOf<ExtractorLink>()
+            val gather: (ExtractorLink) -> Unit = { link -> raw.add(link) }
+            if (loadExtractor(data, data, subtitleCallback, gather)) {
+                val kept = collapseVariants(raw, host)
+                Log.d(TAG, "loadExtractor handled $host, emitted=${raw.isNotEmpty()}, " +
+                    "kept ${kept.size}/${raw.size}")
+                kept.forEach { emit(callback, it) }
+                return true
+            }
+        }
+
+        // Nothing claimed it, or it is ours: treat as Byse/ystream family,
+        // matched on the embed code path so a rotated host still routes here.
         return when {
-            // ystream.id embed: handle with PoW-protected extractor
-            data.contains("ystream.id") -> {
-                YstreamExtractor().getUrl(data, data, subtitleCallback, callback)
+            ours || Regex("""https?://[^/]+/(?:e|v|d)/[A-Za-z0-9]+""").containsMatchIn(data) -> {
+                YstreamExtractor().getUrl(data, data, subtitleCallback, collect)
+                Log.d(TAG, "loadLinks ystream emitted=${collected.isNotEmpty()}")
+                collected.forEach { emit(callback, it) }
                 true
             }
-            else -> loadExtractor(data, data, subtitleCallback, callback)
+            else -> {
+                Log.e(TAG, "loadLinks: nothing handled $host")
+                false
+            }
         }
+    }
+
+    /**
+     * Name a source after the host it actually streams from.
+     *
+     * Links came back carrying the extractor's name, so a Streamhide source and
+     * a Ystream source both read the same in the list even though they point at
+     * different servers -- and Cloudstream shows nothing else to tell them
+     * apart. The host is the part that identifies where the bytes come from.
+     *
+     * ExtractorLink.name is a val, so the link is rebuilt rather than renamed.
+     * referer, headers, quality and type all carry over untouched; only the
+     * label changes.
+     */
+    private suspend fun emit(callback: (ExtractorLink) -> Unit, link: ExtractorLink) {
+        val host = runCatching { java.net.URI(link.url).host }.getOrNull()
+        if (host.isNullOrBlank()) {
+            callback(link)
+            return
+        }
+        val renamed = newExtractorLink(link.source, host, link.url, link.type) {
+            referer = link.referer
+            headers = link.headers
+            quality = link.quality
+            extractorData = link.extractorData
+            audioTracks = link.audioTracks
+        }
+        Log.d(TAG, "source name ${link.name} -> $host")
+        callback(renamed)
+    }
+
+    /**
+     * Host-name match only, no path shape. Safe to act on without risking a
+     * built-in extractor being bypassed, so it decides whether the generic
+     * loadExtractor pass is worth running at all.
+     */
+    private fun isYstreamHost(url: String): Boolean {
+        val host = url.substringAfter("://", "").substringBefore('/').substringBefore(':').lowercase()
+        return YSTREAM_HOSTS.any { host.contains(it) }
+    }
+
+    /**
+     * Keep the master playlist, drop the variants sitting beside it.
+     *
+     * For vstream.id the built-in that the fuzzy matcher hands the URL to
+     * emits the master *and* each of its variants, so one video arrives as a
+     * source per resolution plus the master on top. Captured off the device:
+     *
+     *   .../stream/EUZ9GxUt8.../master.m3u8
+     *   .../stream/EUZ9GxUt8.../index-f1-v1-a1.m3u8
+     *   .../stream/EUZ9GxUt8.../index-f2-v1-a1.m3u8
+     *
+     * This is the mirror image of the Byse case, where generateM3u8 expanded a
+     * master that we then had to collapse. Here the variants arrive already
+     * separate, so the fix is to keep the master and let ExoPlayer read the
+     * ladder -- the resolutions come back as video tracks instead of sources.
+     *
+     * Exact duplicate URLs are dropped too, and mirrors on other hosts are left
+     * alone: those are genuinely different servers, not a rendition of this one.
+     */
+    private fun collapseVariants(links: List<ExtractorLink>, embedHost: String): List<ExtractorLink> {
+        // The site declares exactly one source. Captured from the live page by
+        // evaluating its packed script and stubbing jwplayer, the setup config
+        // holds a single relative path:
+        //
+        //   /stream/wUrx9rq9YKqtDiEAeFZV8g/.../master.m3u8
+        //
+        // whose master has two variants and no I-frame track at all:
+        //
+        //   RESOLUTION=852x480   index-f1-v1-a1.m3u8
+        //   RESOLUTION=1280x720  index-f2-v1-a1.m3u8
+        //
+        // The extra links Cloudstream produced (a streamhide.to master, an
+        // acek-cdn.com master) are not mirrors the site offers -- they are
+        // stale references its fallback regex scraped out of the packed script.
+        // On the device one of them hangs forever and the other shows a
+        // duplicated resolution. Prefer the embed's own host when we have one.
+        val onEmbedHost = links.filter { it.url.substringAfter("//", "").substringBefore('/') == embedHost }
+        val pool = if (onEmbedHost.isNotEmpty()) {
+            Log.d(TAG, "collapse: ${onEmbedHost.size}/${links.size} links on $embedHost, others scraped")
+            onEmbedHost
+        } else links
+
+        val masterDirs = pool.mapNotNull { link ->
+            val path = link.url.substringBefore('?').substringAfter("//", "")
+            val dir = path.substringBeforeLast('/', "")
+            if (path.substringAfterLast('/').startsWith("master")) dir else null
+        }.toSet()
+
+        val seen = mutableSetOf<String>()
+        return pool.filter { link ->
+            val path = link.url.substringBefore('?').substringAfter("//", "")
+            val file = path.substringAfterLast('/')
+            val dir = path.substringBeforeLast('/', "")
+            val isVariantBesideMaster = file.startsWith("index-") && dir in masterDirs
+            val isNew = seen.add(link.url)
+            val keep = isNew && !isVariantBesideMaster
+            if (!keep) {
+                Log.d(TAG, "dropped ${if (isVariantBesideMaster) "variant" else "duplicate"} " +
+                    "${file.ifBlank { link.url.takeLast(40) }}")
+            }
+            keep
+        }
+    }
+
+    companion object {
+        private const val TAG = "JavSegar"
+
+        // The Byse API host rotates per video, so these are matched as
+        // substrings of the host rather than pinned domains. Deliberately does
+        // NOT include vstream.id: that one is a different provider, handled by
+        // a built-in extractor that does produce links.
+        private val YSTREAM_HOSTS = listOf("ystream", "byse", "n1mwq", "f7hyg4q")
     }
 }

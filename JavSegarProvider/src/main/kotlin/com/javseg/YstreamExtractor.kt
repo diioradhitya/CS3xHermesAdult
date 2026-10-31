@@ -35,6 +35,9 @@ class YstreamExtractor : ExtractorApi() {
 
     companion object {
         private const val TAG = "YstreamExtractor"
+
+        /** Fallback Origin when the caller passes no referer. */
+        private const val DEFAULT_SITE_ORIGIN = "https://javsegar.com"
     }
 
     /* ------------------------------------------------------------------ */
@@ -158,11 +161,33 @@ class YstreamExtractor : ExtractorApi() {
         }
     }
 
+    /**
+     * The site that *embeds* the player, used for the Origin header.
+     *
+     * The API checks the Origin against it, and a wrong Origin does not
+     * produce an error - it makes the PoW challenge unsolvable, so the
+     * solver spins until it times out, verify answers "invalid" and
+     * playback answers 428 "captcha_required". On the device that reads as
+     * "no links found".
+     *
+     * Verified live for embed code ktlp8hx3vfnz:
+     *   Origin: https://ystream.id  -> PoW never converges, verify "invalid"
+     *   Origin: https://javsegar.com -> verify "ok", playback 200
+     *
+     * The origin is therefore taken from the referer, which is the post page
+     * the embed sits on, instead of being pinned to the embed host.
+     */
+    @Volatile
+    private var siteOrigin: String = DEFAULT_SITE_ORIGIN
+
     private fun baseHeaders(referer: String?): MutableMap<String, String> {
         return mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
-            "Origin" to "https://f7hyg4q.org"
+            // The API rejects requests whose Origin is not the *site* domain with
+            // 403 "embedding from this domain is not allowed for this video".
+            // The API host itself (which rotates) must never appear here.
+            "Origin" to siteOrigin
         ).also { if (referer != null) it["Referer"] = referer }
     }
 
@@ -268,6 +293,37 @@ class YstreamExtractor : ExtractorApi() {
     }
 
     /* ------------------------------------------------------------------ */
+    /* Fingerprint                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Structurally valid fingerprint object. The API accepts a well-formed
+     * JWT-shaped token without verifying the ES256 signature, so generating a
+     * real P-256 keypair adds latency and a failure mode for no gain.
+     */
+    private fun fingerprint(): Map<String, Any> {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        val seed = System.nanoTime()
+        fun rnd(n: Int): String {
+            val sb = StringBuilder(n)
+            for (i in 0 until n) {
+                sb.append(alphabet[((seed + i * 2654435761L).mod(alphabet.length.toLong())).toInt()])
+            }
+            return sb.toString()
+        }
+        val header = Base64.encodeToString(
+            """{"alg":"ES256","typ":"JWT"}""".toByteArray(),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return mapOf(
+            "token" to "$header.${rnd(80)}.${rnd(86)}",
+            "viewer_id" to rnd(22),
+            "device_id" to rnd(22),
+            "confidence" to 0.9
+        )
+    }
+
+    /* ------------------------------------------------------------------ */
     /* AES-GCM helpers                                                   */
     /* ------------------------------------------------------------------ */
 
@@ -332,22 +388,33 @@ class YstreamExtractor : ExtractorApi() {
         val refererUrl = getBaseUrl(url)
         val code = getCodeFromUrl(url)
         if (code.isEmpty()) return
+
+        // The Origin header has to be the site that embeds the player, not
+        // the embed host. It cannot be taken from the referer here: this
+        // provider hands the *iframe* url to loadLinks, so the referer would
+        // be ystream.id - exactly the host that must not appear. The site is
+        // fixed for this provider, so it is a constant.
+        siteOrigin = DEFAULT_SITE_ORIGIN
         Log.d(TAG, "=== START extract code=$code referer=$referer ===")
 
-        // Step 0: ECDSA attestation (gets fingerprint object)
-        val embedBase = "https://f7hyg4q.org"
-        val fpObj = doAttestation(embedBase)
-        if (fpObj == null) {
-            Log.e(TAG, "attestation failed, aborting")
-            return
-        }
+        // Step 0: structural fingerprint.
+        // The embed API does not verify the ES256 signature — a well-formed
+        // JWT-shaped token is accepted. The previous ECDSA P-256 attestation
+        // round-trip only added latency and an extra failure mode.
+        val fpObj = fingerprint()
 
-        // Step 1: get embed frame URL from details endpoint
+        // Step 1: get embed frame URL from details endpoint.
+        // The API host rotates per video, so always start from the site origin
+        // and read the live host out of embed_frame_url.
         val detailsHeaders = baseHeaders(null)
-        val detailsRaw = httpGet("$embedBase/api/videos/$code/embed/details", detailsHeaders) ?: return
+        // The API host rotates per video, so ask the host we were handed by
+        // the iframe rather than the site origin.
+        val embedHost = getBaseUrl(url)
+        val detailsRaw = httpGet("$embedHost/api/videos/$code/embed/details", detailsHeaders) ?: return
         val details = tryParseJson<DetailsRoot>(detailsRaw) ?: return
         val embedFrameUrl = details.embedFrameUrl
         Log.d(TAG, "details: embed_frame_url=$embedFrameUrl")
+        val embedBase = getBaseUrl(embedFrameUrl)
 
         // Step 2: get PoW challenge — POST with fingerprint
         val captchaBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
@@ -380,13 +447,16 @@ class YstreamExtractor : ExtractorApi() {
 
         // Step 5: get encrypted playback payload — POST with full fingerprint + embed headers
         val playBody = jsonMapper.writeValueAsString(mapOf("fingerprint" to fpObj))
+        val embedRef = "$siteOrigin/e/$code/"
         val playHeaders = mutableMapOf(
             "User-Agent" to ua,
             "Accept" to "application/json, text/plain, */*",
             "Content-Type" to "application/json; charset=utf-8",
-            "X-Embed-Origin" to "ystream.id",
-            "X-Embed-Referer" to (referer ?: embedFrameUrl),
-            "X-Embed-Parent" to "https://ystream.id/e/$code/",
+            "Origin" to siteOrigin,
+            "Referer" to embedRef,
+            "X-Embed-Origin" to siteOrigin,
+            "X-Embed-Referer" to embedRef,
+            "X-Embed-Parent" to embedRef,
             "X-Captcha-Token" to verify?.token.orEmpty()
         )
         val playbackRaw = httpPost("$embedBase/api/videos/$code/embed/playback", playBody, playHeaders) ?: return
@@ -420,12 +490,58 @@ class YstreamExtractor : ExtractorApi() {
         }
         Log.d(TAG, "stream URL: ${streamUrl.take(80)}...")
 
-        M3u8Helper.generateM3u8(
-            name,
-            streamUrl,
-            refererUrl,
-            headers = mapOf("Referer" to "https://ystream.id/e/$code/", "User-Agent" to ua)
-        ).forEach(callback)
+        val streamHeaders = mapOf("Referer" to "$siteOrigin/e/$code/", "User-Agent" to ua)
+
+        // The decrypted payload carries one source; the resolutions come from
+        // the master playlist. generateM3u8 expands that master into one
+        // ExtractorLink per variant, which is why the source list showed an
+        // entry per resolution -- and, with the I-frame track counted as a
+        // variant, sometimes the very same resolution twice.
+        //
+        // These masters also carry an #EXT-X-I-FRAME-STREAM-INF trick-play
+        // track reporting the same RESOLUTION as the rendition, and ExoPlayer
+        // lists both as video tracks. Point at the variant itself when there
+        // is exactly one real rendition: nothing to pick between anyway, and
+        // the duplicate disappears. Keep the master when there is a genuine
+        // ladder so the quality selector keeps working.
+        val finalUrl = resolveSingleVariant(streamUrl, streamHeaders)
+        Log.d(TAG, "final URL: ${finalUrl.take(80)}...")
+
+        callback(
+            newExtractorLink(name, name, finalUrl) {
+                this.referer = refererUrl
+                this.headers = streamHeaders
+            }
+        )
+    }
+
+    /**
+     * Returns the variant playlist URL when [masterUrl] has exactly one real
+     * rendition, otherwise [masterUrl] untouched so the player keeps the full
+     * ladder for its quality selector.
+     */
+    private fun resolveSingleVariant(masterUrl: String, headers: Map<String, String>): String {
+        val text = httpGet(masterUrl, headers) ?: return masterUrl
+        val variants = mutableListOf<String>()
+        var pending = false
+        for (line in text.lineSequence()) {
+            val t = line.trim()
+            when {
+                t.startsWith("#EXT-X-STREAM-INF:") -> pending = true
+                // Trick-play track, not a rendition.
+                t.startsWith("#EXT-X-I-FRAME-STREAM-INF") -> Unit
+                t.isEmpty() || t.startsWith("#") -> Unit
+                pending -> {
+                    variants += t
+                    pending = false
+                }
+            }
+        }
+        Log.d(TAG, "master has ${variants.size} real variant(s)")
+        if (variants.size != 1) return masterUrl
+        val variant = variants.first()
+        if (variant.startsWith("http")) return variant
+        return runCatching { URI(masterUrl).resolve(variant).toString() }.getOrDefault(masterUrl)
     }
 }
 

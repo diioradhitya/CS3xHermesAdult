@@ -7,6 +7,27 @@ CloudStream extensions for adult/NSFW content.
 | Plugin | Status | Description |
 |--------|--------|-------------|
 | JavHey | ✅ Online | JAV streaming with Indonesian subtitles |
+| FilmSemi | ✅ Online | MovieBox, Idlix, VidSrc — **third-party code, see [Attribution](#attribution)** |
+
+## Attribution
+
+### FilmSemi  (sebelumnya AdiFilmSemi)
+
+Not written for this repository. Copied from:
+
+- Source: <https://github.com/bikinveo-hash/RepairPremium_Repo/tree/main/AdiFilmSemi>
+- Binary it was published as: <https://raw.githubusercontent.com/bikinveo-hash/RepairPremium_Repo/builds/AdiFilmSemi.cs3> (v17)
+- Original author, per its own `build.gradle.kts`: **aldry84** (`authors = listOf("aldry84")`, package `com.michat88`)
+
+The upstream repository carries **no LICENSE and no README**, so there is no explicit
+redistribution terms to follow. The files were copied verbatim apart from a credit
+header added to each of them; no behavioural change was made. Keep that header if
+you fork or reuse this code.
+
+Note that the upstream lineage is itself unclear: `bikinveo-hash` publishes the
+plugin, the package and repository description name `michat88`, and the plugin
+credits `aldry84`. If you are the author and want the attribution changed or the
+plugin removed, open an issue.
 
 ## How to Install
 
