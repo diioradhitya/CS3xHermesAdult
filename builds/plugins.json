@@ -240,24 +240,23 @@
     "name": "PodJavProvider"
   },
   {
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/MovieboxProvider.cs3",
+    "fileHash": "sha256-Vk5MXeHqBhUTt7HnrDawp+7gLurUgZs8wqIDeUuwbuk=",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 17884,
     "status": 2,
-    "version": 2,
-    "name": "MovieBox",
-    "internalName": "MovieBoxProvider",
+    "language": "id",
     "authors": [
       "Dio R"
     ],
-    "description": "MovieBox - Movie streaming from movieboxfilm.com",
-    "fileSize": 11359,
-    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "language": "id",
     "tvTypes": [
-      "Movie",
-      "TvSeries"
+      "NSFW"
     ],
-    "iconUrl": "https://movieboxfilm.com/favicon.ico",
-    "apiVersion": "1",
-    "fileHash": "sha256-AUVGrdkBPTJlITHNE0eSVZwPWZi+kXDovzqZOMS/vSI="
+    "version": 1,
+    "internalName": "BokepIndohProvider",
+    "description": "BokepIndoh — Nonton bokep update tiap hari (Bokep Indo, Viral, JAV)",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/BokepIndohProvider.cs3",
+    "name": "BokepIndohProvider",
+    "iconUrl": "https://bokepindoh.exchange/wp-content/uploads/2026/08/cropped-FavIndh-removebg-preview-192x192.png"
   }
 ]
