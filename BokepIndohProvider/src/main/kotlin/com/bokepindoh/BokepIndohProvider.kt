@@ -173,14 +173,24 @@ class BokepIndohProvider : MainAPI() {
                 }
 
                 withContext(Dispatchers.IO) {
-                    // Our own mumu.watch host goes straight to MumuExtractor.
-                    // Everything else gets first refusal from CloudStream's built-ins.
-                    if (hostOf(fixedUrl).contains("mumu.watch")) {
-                        MumuExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
-                    } else {
-                        loadExtractor(fixedUrl, data, subtitleCallback, wrap)
-                        if (!emitted.get() && hostOf(fixedUrl).contains("mumu")) {
+                    // Our own mumu.watch / luluvdoo.com hosts go straight to our
+                    // extractors — CloudStream's built-ins do not claim them
+                    // (LuluStream's host list is streamwish.* / lulustream.com,
+                    // and the embed is packer-encoded). Everything else gets
+                    // first refusal from CloudStream's built-ins.
+                    val host = hostOf(fixedUrl)
+                    when {
+                        host.contains("mumu.watch") ->
                             MumuExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                        host.contains("luluvdoo") || host.contains("lulustream") || host.contains("luluvdo") ->
+                            LuluStreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                        else -> {
+                            loadExtractor(fixedUrl, data, subtitleCallback, wrap)
+                            if (!emitted.get() && host.contains("mumu")) {
+                                MumuExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                            } else if (!emitted.get() && (host.contains("luluvdoo") || host.contains("lulustream"))) {
+                                LuluStreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                            }
                         }
                     }
                 }

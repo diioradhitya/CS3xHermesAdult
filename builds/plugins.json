@@ -240,10 +240,10 @@
     "name": "PodJavProvider"
   },
   {
-    "fileHash": "sha256-Vk5MXeHqBhUTt7HnrDawp+7gLurUgZs8wqIDeUuwbuk=",
+    "fileHash": "sha256-ZmM78i7LDxwoUYGCPKH+jYA0lD3J35pgvxMmm+9snpQ=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 17884,
+    "fileSize": 22848,
     "status": 2,
     "language": "id",
     "authors": [
@@ -252,7 +252,7 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 1,
+    "version": 2,
     "internalName": "BokepIndohProvider",
     "description": "BokepIndoh — Nonton bokep update tiap hari (Bokep Indo, Viral, JAV)",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/BokepIndohProvider.cs3",

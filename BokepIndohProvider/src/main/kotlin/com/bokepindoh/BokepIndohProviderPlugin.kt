@@ -9,5 +9,6 @@ class BokepIndohProviderPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(BokepIndohProvider())
         registerExtractorAPI(MumuExtractor())
+        registerExtractorAPI(LuluStreamExtractor())
     }
 }
