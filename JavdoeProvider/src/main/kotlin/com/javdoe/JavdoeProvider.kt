@@ -4,6 +4,7 @@ import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 /**
  * Javdoe (javdoe.sh) — Indonesian adult streaming, multi-server.
@@ -343,7 +344,7 @@ class JavdoeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> =
-        searchPosts("$base/?s=${query.trim().replace(" ", "+")}")
+        searchPosts("$base/?s=" + URLEncoder.encode(query.trim(), "UTF-8"))
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = get(url) ?: return null

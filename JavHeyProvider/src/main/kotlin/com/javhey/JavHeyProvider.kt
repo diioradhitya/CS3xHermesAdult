@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.jsoup.nodes.Element
 import java.net.URI
+import java.net.URLEncoder
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -50,7 +51,7 @@ class JavHeyProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/search?s=$query"
+        val url = "$mainUrl/search?s=" + URLEncoder.encode(query, "UTF-8")
         val searchHeaders = headers + mapOf("Referer" to "$mainUrl/")
         val document = app.get(url, headers = searchHeaders).document
         
@@ -125,30 +126,37 @@ class JavHeyProvider : MainAPI() {
         )
         val byseDomains = listOf("bysebuho", "bysezejataos", "bysevepoin", "byse")
 
-        rawLinks.forEach { url ->
-            launch(Dispatchers.IO) {
-                try {
-                    val uri = URI(url)
-                    val host = uri.host ?: return@launch
+        var emitted = false
+        // Sequential on purpose: coroutineScope evaluates its return value
+        // before joining launched children, so reading an AtomicBoolean after
+        // `launch { ... }` would always see false. Servers are tried in order
+        // like the other providers in this repo.
+        for (url in rawLinks) {
+            try {
+                val uri = URI(url)
+                val host = uri.host ?: continue
 
-                    when {
-                        streamwishDomains.any { host.contains(it) } -> {
-                            val fixedUrl = url.replace(host, "streamwish.to")
-                            loadExtractor(fixedUrl, data, subtitleCallback, callback)
-                        }
-                        byseDomains.any { host.contains(it) } -> {
-                            ByseSXLocal().getUrl(url, data, subtitleCallback, callback)
-                        }
-                        else -> {
-                            loadExtractor(url, data, subtitleCallback, callback)
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                val wrapped: (ExtractorLink) -> Unit = { link ->
+                    emitted = true
+                    callback(link)
                 }
+                when {
+                    streamwishDomains.any { host.contains(it) } -> {
+                        val fixedUrl = url.replace(host, "streamwish.to")
+                        loadExtractor(fixedUrl, data, subtitleCallback, wrapped)
+                    }
+                    byseDomains.any { host.contains(it) } -> {
+                        ByseSXLocal().getUrl(url, data, subtitleCallback, wrapped)
+                    }
+                    else -> {
+                        loadExtractor(url, data, subtitleCallback, wrapped)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
-        return@coroutineScope true
+        return@coroutineScope emitted
     }
 }
 

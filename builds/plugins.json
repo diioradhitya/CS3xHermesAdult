@@ -1,10 +1,10 @@
 [
   {
     "iconUrl": "https://anilos.com/wp-content/uploads/2023/01/cropped-anilos-logo.png",
-    "fileHash": "sha256-2f0dede79e5dafbc8392d5efcd5be621f7e8cc5681794721e01c783003d634fa",
+    "fileHash": "sha256-HOapkcKeZebzJiQGqku+M41WQJjv0efQIkQzFkwlsfE=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 18381,
+    "fileSize": 18447,
     "status": 2,
     "language": "en",
     "authors": [
@@ -13,31 +13,31 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "AnilosProvider",
     "description": "Anilos - Mature Women of Interest (Direct MP4 with auto token refresh)",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/AnilosProvider.cs3",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AnilosProvider.cs3",
     "name": "AnilosProvider"
   },
   {
-    "fileHash": "sha256-668e413b9e2ecfed97543793fecdec442e2fbb5f223d1449b4eceb4a81ed1fd1",
+    "fileHash": "sha256-mzSXR+yoeyNrVk74zwNQgHKrfPMHNX7H/z4vIB7YadU=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 45715,
+    "fileSize": 45777,
     "status": 2,
     "language": "id",
     "authors": [
       "Dio R"
     ],
-    "version": 23,
+    "version": 24,
     "internalName": "AVTubeProvider",
-    "description": "AVTube \u2014 Indonesian adult streaming, Ystream/Byse embed fixed",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/AVTubeProvider.cs3",
+    "description": "AVTube — Indonesian adult streaming, Ystream/Byse embed fixed",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
     "name": "AVTubeProvider"
   },
   {
     "iconUrl": "https://klikxxi.me/wp-content/uploads/2024/02/cropped-site-icon.png",
-    "fileHash": "sha256-0b12435d437d9586f43aca61f2dff21c58ba68eb2c4822a4d99b5e66354676e4",
+    "fileHash": "sha256-CxJDXUN9lYb0Osph8t/yHFi6aOssSCKk2ZteZjVGduQ=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 214878,
@@ -51,32 +51,32 @@
     ],
     "version": 28,
     "internalName": "FilmSemi",
-    "description": "FilmSemi \u2014 MovieBox, Idlix, VidSrc (film & seri NSFW)",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/FilmSemi.cs3",
+    "description": "FilmSemi — MovieBox, Idlix, VidSrc (film & seri NSFW)",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/FilmSemi.cs3",
     "name": "FilmSemi"
   },
   {
-    "fileHash": "sha256-97de909fb109b4efcc66c13795c41f1d62bc62f9a3f55b308736061bcc95b76b",
+    "fileHash": "sha256-7iS1nqhtEFnA00MIEzV4GDlK1UMl7oo3AwAMePZt4ac=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 53729,
+    "fileSize": 53746,
     "status": 2,
     "language": "id",
     "authors": [
       "Dio R"
     ],
-    "version": 25,
+    "version": 26,
     "internalName": "JavdoeProvider",
-    "description": "Javdoe (javdoe.sh) \u2014 Indonesian adult streaming",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavdoeProvider.cs3",
+    "description": "Javdoe (javdoe.sh) — Indonesian adult streaming",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavdoeProvider.cs3",
     "name": "JavdoeProvider"
   },
   {
     "iconUrl": "https://javhd.com/wp-content/uploads/2024/06/javhd-logo.png",
-    "fileHash": "sha256-d5d64ef1fbec72ec0b94739db725e30a1fd34e5f96d96b6eee09c55216482f20",
+    "fileHash": "sha256-300wEQOGjrMumINN0llAlmKN1gBjkP+SPRoi+SiWneM=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 19882,
+    "fileSize": 19931,
     "status": 2,
     "language": "en",
     "authors": [
@@ -85,18 +85,18 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 7,
+    "version": 8,
     "internalName": "JavHdProvider",
-    "description": "JavHD \u2014 Japanese Adult Video Streaming",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavHdProvider.cs3",
+    "description": "JavHD — Japanese Adult Video Streaming",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHdProvider.cs3",
     "name": "JavHdProvider"
   },
   {
     "iconUrl": "https://javhey.com/wp-content/uploads/2024/06/javhey.com-logo.png",
-    "fileHash": "sha256-2180ac7e1b6a7017ed7c8f936fc68d0c163f9b632f0bbe2bd091a8fb0fe40844",
+    "fileHash": "sha256-QJ1/gG9csZhHkv+tPWgZAKo4q6tL4wrgpECs2bQ4vWc=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 22577,
+    "fileSize": 23125,
     "status": 1,
     "language": "id",
     "authors": [
@@ -105,66 +105,66 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 1,
+    "version": 2,
     "internalName": "JavHeyProvider",
-    "description": "JavHey \u2014 Streaming Porn and JAV",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavHeyProvider.cs3",
+    "description": "JavHey — Streaming Porn and JAV",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavHeyProvider.cs3",
     "name": "JavHeyProvider"
   },
   {
-    "fileHash": "sha256-6bec00dee4d0cb16f3303b025395149d39ae47be95c382933c2cf8a24da7f313",
+    "fileHash": "sha256-UnAjSwr6sukLEJAnTok3sBm3nJ6TSU2XUWJPeXzRJmU=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 45085,
+    "fileSize": 45086,
     "status": 2,
     "language": "id",
     "authors": [
       "Dio R"
     ],
-    "version": 20,
+    "version": 21,
     "internalName": "JavSegarProvider",
-    "description": "JavSegar \u2014 JAV streaming with HD video",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavSegarProvider.cs3",
+    "description": "JavSegar — JAV streaming with HD video",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSegarProvider.cs3",
     "name": "JavSegarProvider"
   },
   {
-    "fileHash": "sha256-4fbe114070725bbf23e940ac6fd3a0fe6ccbd02657a1d3e3fecf4a2adad88e27",
+    "fileHash": "sha256-gfzf8ivNOQfKaFq54+in/Esg6FLZT/GgzyeCqU8N3W0=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 11955,
+    "fileSize": 12477,
+    "status": 2,
+    "language": "id",
+    "authors": [
+      "Dio R"
+    ],
+    "version": 3,
+    "internalName": "JavSekProvider",
+    "description": "JavSek — JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavSekProvider.cs3",
+    "name": "JavSekProvider"
+  },
+  {
+    "fileHash": "sha256-YsKhw5KHuuIkh/OGa3UHOPlr80MHeUmSymaRKoW9eTE=",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 10771,
     "status": 2,
     "language": "id",
     "authors": [
       "Dio R"
     ],
     "version": 2,
-    "internalName": "JavSekProvider",
-    "description": "JavSek \u2014 JAV streaming with multiple servers (LuluStream, Morencius, AbyssPlayer, iPlayerHLS, UPNS)",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavSekProvider.cs3",
-    "name": "JavSekProvider"
-  },
-  {
-    "fileHash": "sha256-adc064e04cc61dfff7e7a82e12a865928dff849d269b636da5a7981017ab92bb",
-    "apiVersion": 1,
-    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 10568,
-    "status": 2,
-    "language": "id",
-    "authors": [
-      "Dio R"
-    ],
-    "version": 1,
     "internalName": "JavStoryProvider",
-    "description": "JAVStory1 \u2014 JAV streaming with Indo & English subtitle",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavStoryProvider.cs3",
+    "description": "JAVStory1 — JAV streaming with Indo & English subtitle",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavStoryProvider.cs3",
     "name": "JavStoryProvider"
   },
   {
     "iconUrl": "https://javtiful.com/uploads/site/icon/2026/04/27/new_jt_icon.png",
-    "fileHash": "sha256-2dca2db8174430123e541c1d06a7f13c5a42e70230f6b4481d78ac4dbb8a9c20",
+    "fileHash": "sha256-Ko2PiBClc3ItXeOxMOQPspwJFIyw0vWsQV6WnPaT1tg=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 14090,
+    "fileSize": 14298,
     "status": 2,
     "language": "id",
     "authors": [
@@ -173,15 +173,15 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 1,
+    "version": 2,
     "internalName": "JavtifulProvider",
-    "description": "Javtiful \u2014 Streaming JAV HD, Chinese AV, dan konten dewasa lainnya",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/JavtifulProvider.cs3",
+    "description": "Javtiful — Streaming JAV HD, Chinese AV, dan konten dewasa lainnya",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/JavtifulProvider.cs3",
     "name": "JavtifulProvider"
   },
   {
     "iconUrl": "https://www.milfed.com/favicon.ico",
-    "fileHash": "sha256-a671b454a0fb225864f0f2bbae68d9c2b2ddbf5ff4b5e1a2a350d7ddd8e05c56",
+    "fileHash": "sha256-pnG0VKD7Ilhk8PK7rmjZwrLdv1/0teGio1DX3djgXFY=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
     "fileSize": 30578,
@@ -195,16 +195,16 @@
     ],
     "version": 3,
     "internalName": "MilfedProvider",
-    "description": "Milfed \u2014 Mature Milf Porn Videos",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/MilfedProvider.cs3",
+    "description": "Milfed — Mature Milf Porn Videos",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/MilfedProvider.cs3",
     "name": "MilfedProvider"
   },
   {
     "iconUrl": "https://nekopoi.care/wp-content/uploads/2021/03/nekopoi.png",
-    "fileHash": "sha256-52b37f7752b2b1b8f1ac435409296ef6c9acbc0393810695f973e0bfcd32098a",
+    "fileHash": "sha256-YmNwBQFe8S3qBN907njmoa8Ovy7C6e4aEY3BZL8gkaE=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 16850,
+    "fileSize": 17273,
     "status": 2,
     "language": "id",
     "authors": [
@@ -213,18 +213,18 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "NekoPoiProvider",
-    "description": "NekoPoi \u2014 Hentai Subtitle Indonesia",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/NekoPoiProvider.cs3",
+    "description": "NekoPoi — Hentai Subtitle Indonesia",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/NekoPoiProvider.cs3",
     "name": "NekoPoiProvider"
   },
   {
     "iconUrl": "https://podjav.tv/wp-content/uploads/2025/02/cropped-podjav-192x192.png",
-    "fileHash": "sha256-4577afc2147f53b17508726f72510e55faaf0c104e4f7febebff86ee0d88bfb9",
+    "fileHash": "sha256-riyyfY7VxHXFXFwksGqyVdeDm0KVvqDwl3QfgvNf4TI=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 14998,
+    "fileSize": 15050,
     "status": 1,
     "language": "id",
     "authors": [
@@ -233,10 +233,10 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "PodJavProvider",
-    "description": "PodJav \u2014 Streaming JAV Sub Indo, langsung m3u8",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/builds/PodJavProvider.cs3",
+    "description": "PodJav — Streaming JAV Sub Indo, langsung m3u8",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/PodJavProvider.cs3",
     "name": "PodJavProvider"
   },
   {
@@ -258,6 +258,6 @@
     ],
     "iconUrl": "https://movieboxfilm.com/favicon.ico",
     "apiVersion": "1",
-    "fileHash": "sha256-014546add9013d32652131cd134792559c0f5998be9170e8bf3a9938c4bfbd22"
+    "fileHash": "sha256-AUVGrdkBPTJlITHNE0eSVZwPWZi+kXDovzqZOMS/vSI="
   }
 ]

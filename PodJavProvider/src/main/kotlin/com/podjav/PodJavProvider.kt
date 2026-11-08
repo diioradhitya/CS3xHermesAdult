@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.newSubtitleFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 
 class PodJavProvider : MainAPI() {
     override var mainUrl = "https://podjav.tv"
@@ -40,7 +41,7 @@ class PodJavProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=$query"
+        val url = "$mainUrl/?s=" + URLEncoder.encode(query, "UTF-8")
         val document = app.get(url, headers = headers).document
         return document.select("a.video-card").mapNotNull { it.toSearchResult() }
     }
@@ -172,6 +173,6 @@ class PodJavProvider : MainAPI() {
                 }
             }
 
-            return@coroutineScope true
+            return@coroutineScope !sourcesJson.isNullOrBlank()
         }
 }

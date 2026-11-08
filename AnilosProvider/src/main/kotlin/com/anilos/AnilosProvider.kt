@@ -34,7 +34,7 @@ class AnilosProvider : MainAPI() {
     private fun pageUrl(base: String, page: Int): String = if (page <= 1) base else "$base/page/$page"
 
     private suspend fun fetchDocument(url: String, attempts: Int = 3): org.jsoup.nodes.Document? {
-        repeat(3) { attempt ->
+        repeat(attempts) { attempt ->
             try {
                 val doc = app.get(url, headers = mapOf(
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -132,6 +132,7 @@ class AnilosProvider : MainAPI() {
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         if (data.isBlank()) return false
         val servers = data.split("|||").map { it.split("|", limit = 2).let { if (it.size == 2) it[0] to it[1] else "Watch" to it[0] } }
+        var emitted = false
         for ((quality, url) in servers) {
             if (url.isBlank()) continue
             if (url.contains("images.anilos.com") && url.endsWith(".mp4")) {
@@ -148,6 +149,7 @@ class AnilosProvider : MainAPI() {
                     }
                 }
                 callback.invoke(link)
+                emitted = true
             } else if (url.startsWith("http")) {
                 val collected = mutableListOf<ExtractorLink>()
                 val success = loadExtractor(url, subtitleCallback, { collected.add(it) })
@@ -158,9 +160,10 @@ class AnilosProvider : MainAPI() {
                         this.referer = toEmit.referer; this.headers = toEmit.headers; this.quality = toEmit.quality
                         this.extractorData = toEmit.extractorData; this.audioTracks = toEmit.audioTracks
                     })
+                    emitted = true
                 }
             }
         }
-        return false
+        return emitted
     }
 }

@@ -31,10 +31,20 @@ class JavtifulProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page == 1) {
-            request.data.removeSuffix("/page=")
+        // request.data ends with "/page=" or "?sort=...&page=". Strip the
+        // placeholder, then re-attach page=N with the right separator (? or &).
+        // The old code did removeSuffix("/page=") + "?page=$page", which is a
+        // no-op for query-style tabs and produced "...&page=?page=2".
+        val stripped = request.data
+            .removeSuffix("/page=")
+            .removeSuffix("&page=")
+            .removeSuffix("?page=")
+            .removeSuffix("page=")
+        val url = if (page <= 1) {
+            stripped
         } else {
-            "${request.data.removeSuffix("/page=")}?page=$page"
+            val sep = if (stripped.contains("?")) "&" else "?"
+            "$stripped${sep}page=$page"
         }
         val doc = app.get(url, headers = baseHeaders).document
         return newHomePageResponse(request.name, doc.parseVideoList())

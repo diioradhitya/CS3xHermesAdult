@@ -87,6 +87,7 @@ class JavSekProvider : MainAPI() {
             if (pieces.size == 2) pieces[0] to pieces[1] else "Server" to part
         }
 
+        var emitted = false
         for ((serverName, serverUrl) in servers) {
             try {
                 val doc = app.get(serverUrl, headers = mapOf("User-Agent" to userAgent)).document
@@ -98,12 +99,16 @@ class JavSekProvider : MainAPI() {
                 val resolvedUrl = if (embedUrl.startsWith("http")) embedUrl else "https:$embedUrl"
 
                 // Call loadExtractor via CloudStream helper
-                loadExtractor(resolvedUrl, "$mainUrl/", subtitleCallback, callback)
+                val wrapped: (ExtractorLink) -> Unit = { link ->
+                    emitted = true
+                    callback(link)
+                }
+                loadExtractor(resolvedUrl, "$mainUrl/", subtitleCallback, wrapped)
             } catch (e: Exception) {
                 // Skip failed servers
             }
         }
-        return true
+        return emitted
     }
 
     private fun org.jsoup.nodes.Document.parseVideoList(): List<SearchResponse> {

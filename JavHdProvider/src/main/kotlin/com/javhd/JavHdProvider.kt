@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.google.gson.JsonParser
 import org.jsoup.Jsoup
+import java.net.URLEncoder
 
 class JavHdProvider : MainAPI() {
     override var mainUrl = "https://javhd.com"
@@ -34,7 +35,7 @@ class JavHdProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val postHeaders = headers + mapOf("X-Requested-With" to "XMLHttpRequest")
         return try {
-            val response = app.post("$mainUrl/en/search?q=$query", headers = postHeaders)
+            val response = app.post("$mainUrl/en/search?q=" + URLEncoder.encode(query, "UTF-8"), headers = postHeaders)
             if (!response.isSuccessful) return emptyList()
             val body = response.body?.string() ?: return emptyList()
             if (!body.trimStart().startsWith("{")) return emptyList()

@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.delay
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 /**
  * javsegar.com is a WordPress site whose media library is effectively empty:
@@ -132,7 +133,7 @@ class JavSegarProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         // The listing markup carries the cover; REST search does not, so search
         // the HTML. Verified live: /?s=JUL-416 returns 1 card with 1 poster.
-        return listPosts("$mainUrl/?s=${query.replace(" ", "+")}")
+        return listPosts("$mainUrl/?s=" + URLEncoder.encode(query, "UTF-8"))
     }
 
     override suspend fun load(url: String): LoadResponse? {

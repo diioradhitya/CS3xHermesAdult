@@ -21,7 +21,10 @@ class JavStoryProvider : MainAPI() {
     private fun Element.toSearchResponse(): SearchResponse? {
         val a = selectFirst("a.ct-media-container") ?: return null
         val href = a.attr("href").ifBlank { return null }
-        val title = selectFirst("h1.entry-title a")?.text() ?: a.attr("aria-label") ?: return null
+        val title = selectFirst("h1.entry-title a")?.text()?.trim()
+            ?.ifBlank { null }
+            ?: a.attr("aria-label").trim().ifBlank { null }
+            ?: return null
         val img = a.selectFirst("img")
             ?.attr("data-src")
             ?.ifBlank { a.selectFirst("img")?.attr("src") }
@@ -45,14 +48,15 @@ class JavStoryProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) request.data else "$mainUrl/page/$page/"
+        val base = request.data.removeSuffix("/").ifBlank { mainUrl }
+        val url = if (page <= 1) base else "$base/page/$page/"
         val document = app.get(url).document
         val items = document.select("article.entry-card").mapNotNull { it.toSearchResponse() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/search/${query.replace(" ", "-")}/"
+        val url = "$mainUrl/search/${query.trim().replace(" ", "-")}/"
         val document = app.get(url).document
         return document.select("article.entry-card").mapNotNull { it.toSearchResponse() }
     }

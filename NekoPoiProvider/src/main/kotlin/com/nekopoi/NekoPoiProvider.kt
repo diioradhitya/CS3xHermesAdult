@@ -123,13 +123,18 @@ class NekoPoiProvider : MainAPI() {
         val document = app.get(episodeUrl, headers = headers).document
         // Only player iframes (skip ad/discord/widget frames)
         val playerHosts = listOf("playmogo", "streampoi", "dood", "streamruby", "embed", "ystream", "cdn")
+        var emitted = false
         document.select("iframe[src]").forEach { iframe ->
             val src = iframe.attr("abs:src")
             if (src.isNotBlank() && playerHosts.any { src.contains(it, ignoreCase = true) }) {
                 // Referer can be the episode URL or mainUrl; we'll use episodeUrl as referer for safety.
-                loadExtractor(src, episodeUrl, subtitleCallback, callback)
+                val wrapped: (ExtractorLink) -> Unit = { link ->
+                    emitted = true
+                    callback(link)
+                }
+                loadExtractor(src, episodeUrl, subtitleCallback, wrapped)
             }
         }
-        return true
+        return emitted
     }
 }

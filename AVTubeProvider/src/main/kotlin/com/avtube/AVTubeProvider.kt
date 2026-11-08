@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 class AVTubeProvider : MainAPI() {
     override var mainUrl = "https://avtubreal.com"
@@ -39,7 +40,7 @@ class AVTubeProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=$query"
+        val url = "$mainUrl/?s=" + URLEncoder.encode(query, "UTF-8")
         val document = app.get(url, headers = headers).document
 
         return document.select("article.thumb-block.video-preview-item").mapNotNull { it.toSearchResult() }
