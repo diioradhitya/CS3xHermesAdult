@@ -190,12 +190,16 @@ class Bokepindo13Provider : MainAPI() {
                             MumuExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
                         host.contains("luluvdoo") || host.contains("lulustream") || host.contains("luluvdo") ->
                             LuluStreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                        host.contains("bebasbokep") ->
+                            BebasBokepExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
                         else -> {
                             loadExtractor(fixedUrl, data, subtitleCallback, wrap)
                             if (!emitted.get() && host.contains("mumu")) {
                                 MumuExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
                             } else if (!emitted.get() && (host.contains("luluvdoo") || host.contains("lulustream"))) {
                                 LuluStreamExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
+                            } else if (!emitted.get() && host.contains("bebasbokep")) {
+                                BebasBokepExtractor().getUrl(fixedUrl, data, subtitleCallback, wrap)
                             }
                         }
                     }

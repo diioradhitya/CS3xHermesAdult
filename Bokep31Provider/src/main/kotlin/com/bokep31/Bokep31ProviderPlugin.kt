@@ -10,5 +10,6 @@ class Bokep31ProviderPlugin : Plugin() {
         registerMainAPI(Bokep31Provider())
         registerExtractorAPI(MumuExtractor())
         registerExtractorAPI(LuluStreamExtractor())
+        registerExtractorAPI(BebasBokepExtractor())
     }
 }

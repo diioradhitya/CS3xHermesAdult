@@ -10,5 +10,6 @@ class Bokepindo13ProviderPlugin : Plugin() {
         registerMainAPI(Bokepindo13Provider())
         registerExtractorAPI(MumuExtractor())
         registerExtractorAPI(LuluStreamExtractor())
+        registerExtractorAPI(BebasBokepExtractor())
     }
 }
