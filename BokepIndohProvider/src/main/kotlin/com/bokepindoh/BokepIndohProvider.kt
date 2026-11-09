@@ -140,7 +140,9 @@ class BokepIndohProvider : MainAPI() {
         val h = Regex("(\\d+)H").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val m = Regex("(\\d+)M").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val s = Regex("(\\d+)S").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        return h * 3600 + m * 60 + s
+        // LoadResponse.duration is in MINUTES (see FilmSemi res.runtime);
+        // seconds here made a 3-minute video read as 3 hours.
+        return (h * 3600 + m * 60 + s) / 60
     }
 
     override suspend fun loadLinks(

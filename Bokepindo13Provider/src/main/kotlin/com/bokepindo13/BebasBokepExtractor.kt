@@ -110,8 +110,11 @@ open class BebasBokepExtractor : ExtractorApi() {
      */
     private fun unpack(script: String): String? {
         // Outer call: first arg is the packed JS string, then base, count.
+        // `.*?` (not [^}]*) because the Bebas body nests `}` inside
+        // e=function(c){...} / if(){...} — [^}]* stops at the first inner brace.
         val head = Regex(
-            """eval\(function\(p,a,c,k,e,d\)\{[^}]*return p[^}]*\}\s*\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,?"""
+            """eval\(function\(p,a,c,k,e,d\)\{.*?return p.*?\}\s*\(\s*'((?:[^'\\]|\\.)*)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,?""",
+            RegexOption.DOT_MATCHES_ALL
         ).find(script) ?: return null
         val p = head.groupValues[1]
         val base = head.groupValues[2].toIntOrNull() ?: return null
