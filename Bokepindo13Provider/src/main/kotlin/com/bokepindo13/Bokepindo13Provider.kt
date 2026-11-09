@@ -110,7 +110,18 @@ class Bokepindo13Provider : MainAPI() {
             ?: document.selectFirst("meta[name=description]")?.attr("content")
 
         val durationMeta = document.selectFirst("meta[itemprop=duration]")?.attr("content")
-        val duration = durationMeta?.let { parseISO8601(it) }
+        val durationSec = durationMeta?.let { parseISO8601(it) }
+        val durationMin = durationSec?.let { it / 60 }
+        val durationText = durationSec?.takeIf { it > 0 }?.let { sec ->
+            val mm = sec / 60
+            val ss = sec % 60
+            "Durasi: $mm menit $ss detik ($mm:${ss.toString().padStart(2, '0')})"
+        }
+        val plotWithDuration = when {
+            durationText != null && !description.isNullOrBlank() -> "$durationText\n$description"
+            durationText != null -> durationText
+            else -> description
+        }
 
         // Detail page nests its category links differently from listing cards;
         // fall back to the URL slug so the tag list is never empty.
@@ -126,9 +137,9 @@ class Bokepindo13Provider : MainAPI() {
 
         return newMovieLoadResponse(title, url, TvType.NSFW, url) {
             this.posterUrl = poster
-            this.plot = description
+            this.plot = plotWithDuration
             this.tags = tags
-            this.duration = duration
+            this.duration = durationMin
             this.recommendations = recommended
         }
     }
@@ -138,9 +149,10 @@ class Bokepindo13Provider : MainAPI() {
         val h = Regex("(\\d+)H").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val m = Regex("(\\d+)M").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         val s = Regex("(\\d+)S").find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        // LoadResponse.duration is in MINUTES (see FilmSemi res.runtime);
-        // seconds here made a 3-minute video read as 3 hours.
-        return (h * 3600 + m * 60 + s) / 60
+        // Return total SECONDS; the caller renders minutes in `duration`
+        // (CloudStream wants minutes) and keeps the remainder seconds in the
+        // plot line so "3 menit" does not swallow the ":25".
+        return h * 3600 + m * 60 + s
     }
 
     override suspend fun loadLinks(

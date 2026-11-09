@@ -20,16 +20,16 @@
     "name": "AnilosProvider"
   },
   {
-    "fileHash": "sha256-9gsBmvGkbYPSewDB1RQdPCGs6lVQBpJFLpGSsNuiHGo=",
+    "fileHash": "sha256-rXZ+LCt88qvSnPzqsrH3mAXqgBAvUUgVVyDlx3QnGLA=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 45781,
+    "fileSize": 46263,
     "status": 2,
     "language": "id",
     "authors": [
       "Dio R"
     ],
-    "version": 25,
+    "version": 26,
     "internalName": "AVTubeProvider",
     "description": "AVTube — Indonesian adult streaming, Ystream/Byse embed fixed",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/AVTubeProvider.cs3",
@@ -240,10 +240,30 @@
     "name": "PodJavProvider"
   },
   {
-    "fileHash": "sha256-kbhnqRKADn2Qn+nWJQuZ95Bc8Gfjy7fVd2INIenxm+E=",
+    "fileHash": "sha256-zRq6wtbVYYY9pOCAoLoRaQ0JCABAeAgcEs+DLgv9Hes=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 22790,
+    "fileSize": 23289,
+    "status": 2,
+    "language": "id",
+    "authors": [
+      "Dio R"
+    ],
+    "tvTypes": [
+      "NSFW"
+    ],
+    "version": 5,
+    "internalName": "BokepIndohProvider",
+    "description": "BokepIndoh — Nonton bokep update tiap hari (Bokep Indo, Viral, JAV)",
+    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/BokepIndohProvider.cs3",
+    "name": "BokepIndohProvider",
+    "iconUrl": "https://bokepindoh.exchange/wp-content/uploads/2026/08/cropped-FavIndh-removebg-preview-192x192.png"
+  },
+  {
+    "fileHash": "sha256-QEHAK5IL8vQfMc2lhO/EqNdniBYDppU719o0budL1l8=",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
+    "fileSize": 27494,
     "status": 2,
     "language": "id",
     "authors": [
@@ -253,26 +273,6 @@
       "NSFW"
     ],
     "version": 4,
-    "internalName": "BokepIndohProvider",
-    "description": "BokepIndoh — Nonton bokep update tiap hari (Bokep Indo, Viral, JAV)",
-    "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/BokepIndohProvider.cs3",
-    "name": "BokepIndohProvider",
-    "iconUrl": "https://bokepindoh.exchange/wp-content/uploads/2026/08/cropped-FavIndh-removebg-preview-192x192.png"
-  },
-  {
-    "fileHash": "sha256-/6sHx3PPT5PiELiA8Xvnsy+/1onmzIoGIKV7YbW24f8=",
-    "apiVersion": 1,
-    "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 26996,
-    "status": 2,
-    "language": "id",
-    "authors": [
-      "Dio R"
-    ],
-    "tvTypes": [
-      "NSFW"
-    ],
-    "version": 3,
     "internalName": "Bokepindo13Provider",
     "description": "Bokepindo13 — Situs bokep Indo update tiap hari (Indo, Viral, Hijab, Pelajar)",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/Bokepindo13Provider.cs3",
@@ -280,10 +280,10 @@
     "iconUrl": "https://bokepindo13.motorcycles/wp-content/uploads/2024/12/cropped-cropped-bokepindo13-270x270-2-192x192.png"
   },
   {
-    "fileHash": "sha256-Oa3ANejPg13abUlBUouVnJuKymEwWTJSOds06qi4/XQ=",
+    "fileHash": "sha256-aiU4+8lprPAcGNDR/GkMtxzcGwAoV/AeMIhvAwz6O3A=",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/diioradhitya/CS3xHermesAdult",
-    "fileSize": 26927,
+    "fileSize": 27430,
     "status": 2,
     "language": "id",
     "authors": [
@@ -292,7 +292,7 @@
     "tvTypes": [
       "NSFW"
     ],
-    "version": 3,
+    "version": 4,
     "internalName": "Bokep31Provider",
     "description": "Bokep31 — Situs bokep Indo viral terbaru (Indo, JAV, Asian)",
     "url": "https://raw.githubusercontent.com/diioradhitya/CS3xHermesAdult/main/builds/Bokep31Provider.cs3",
