@@ -153,10 +153,18 @@ class BokepIndohProvider : MainAPI() {
 
         // Harvest every iframe, not just the first. These pages are padded with ad
         // and promo iframes, so selectFirst regularly landed on a tracking frame.
-        val preferred = document.select("div.responsive-player iframe[src], div.video-player iframe[src], iframe[src]")
-            .map { it.attr("src").trim() }
-            .filter { it.isNotBlank() }
-            .mapNotNull { src -> runCatching { fixUrl(src) }.getOrDefault(src) }
+        // BokepIndoh lazy-loads the player with WP Rocket: iframe[src] is
+        // "about:blank" and the real address is in data-lazy-src. Reading only
+        // src yields 0 http links (the duplicate in <noscript> is not parsed by
+        // jsoup), which surfaced as "no links found".
+        val preferred = document.select("div.responsive-player iframe, div.video-player iframe, iframe")
+            .mapNotNull { iframe ->
+                val src = iframe.attr("src").trim().takeIf { it.startsWith("http") }
+                    ?: iframe.attr("data-lazy-src").trim().takeIf { it.isNotBlank() }
+                    ?: iframe.attr("data-src").trim().takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+                runCatching { fixUrl(src) }.getOrDefault(src)
+            }
             .filter { it.startsWith("http") }
             .distinct()
 

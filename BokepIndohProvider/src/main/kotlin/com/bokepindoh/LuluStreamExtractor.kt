@@ -49,7 +49,7 @@ open class LuluStreamExtractor : ExtractorApi() {
             val script = app.get(embedUrl, headers = headers).text
 
             val unpacked = unpack(script) ?: script
-            val master = Regex("""file"\s*:\s*"(https?://[^"]+?master\.m3u8[^"]*)"""")
+            val master = Regex("""file\s*:\s*"(https?://[^"]+?master\.m3u8[^"]*)"""")
                 .find(unpacked)?.groupValues?.get(1)
                 ?: Regex("""https?://[^\s"'\\]+/hls[^"'\\\s]*master\.m3u8[^\s"'\\]*""")
                     .find(unpacked)?.value
