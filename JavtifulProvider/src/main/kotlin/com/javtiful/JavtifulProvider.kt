@@ -99,13 +99,25 @@ class JavtifulProvider : MainAPI() {
             } catch (e: Exception) { null }
         }
 
+        val durationMin = durationSec?.let { it / 60 }
+        val durationText = durationSec?.takeIf { it > 0 }?.let { sec ->
+            val mm = sec / 60
+            val ss = sec % 60
+            "Durasi: $mm menit $ss detik ($mm:${ss.toString().padStart(2, '0')})"
+        }
+        val plotWithDuration = when {
+            durationText != null && !plot.isNullOrBlank() -> "$durationText\n$plot"
+            durationText != null -> durationText
+            else -> plot
+        }
+
         val recommended = doc.parseVideoList()
 
         return newMovieLoadResponse(title, url, TvType.NSFW, apiUrl) {
             this.posterUrl = poster
-            this.plot = plot
+            this.plot = plotWithDuration
             this.tags = allTags
-            this.duration = durationSec
+            this.duration = durationMin
             this.recommendations = recommended
         }
     }
