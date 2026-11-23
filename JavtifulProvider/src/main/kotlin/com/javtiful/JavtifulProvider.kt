@@ -1,5 +1,6 @@
 package com.javtiful
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
@@ -27,14 +28,17 @@ class JavtifulProvider : MainAPI() {
         "$mainUrl/id/videos?sort=most_viewed&page=" to "Most Viewed",
         "$mainUrl/id/videos?sort=popular_week&page=" to "Popular Week",
         "$mainUrl/id/censored/page=" to "Censored",
-        "$mainUrl/id/uncensored/page=" to "Uncensored"
+        "$mainUrl/id/uncensored/page=" to "Uncensored",
+        "$mainUrl/id/reducing-mosaic/page=" to "Reducing Mosaic",
+        "$mainUrl/id/shorts" to "Shorts"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val isShorts = request.data.contains("/shorts")
         // request.data ends with "/page=" or "?sort=...&page=". Strip the
         // placeholder, then re-attach page=N with the right separator (? or &).
-        // The old code did removeSuffix("/page=") + "?page=$page", which is a
-        // no-op for query-style tabs and produced "...&page=?page=2".
+        // Shorts uses cursor-based pagination via its JS API, so it has no
+        // stable ?page=N support; only the first page is served here.
         val stripped = request.data
             .removeSuffix("/page=")
             .removeSuffix("&page=")
@@ -42,12 +46,15 @@ class JavtifulProvider : MainAPI() {
             .removeSuffix("page=")
         val url = if (page <= 1) {
             stripped
+        } else if (isShorts) {
+            return newHomePageResponse(request.name, emptyList())
         } else {
             val sep = if (stripped.contains("?")) "&" else "?"
             "$stripped${sep}page=$page"
         }
         val doc = app.get(url, headers = baseHeaders).document
-        return newHomePageResponse(request.name, doc.parseVideoList())
+        val items = if (isShorts) doc.parseShortsList() else doc.parseVideoList()
+        return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -184,6 +191,35 @@ class JavtifulProvider : MainAPI() {
                 this.posterUrl = poster
                 // quality & duration not available in SearchResponse
             }
+        }
+    }
+
+    private val shortsMapper = ObjectMapper()
+
+    private fun org.jsoup.nodes.Document.parseShortsList(): List<SearchResponse> {
+        val script = this.selectFirst("script#shorts-bootstrap") ?: return emptyList()
+        val jsonText = script.data().ifBlank { script.html() }.ifBlank { return emptyList() }
+        return try {
+            val root = shortsMapper.readTree(jsonText)
+            val items = root.path("feed").path("items")
+            if (!items.isArray) return emptyList()
+            items.mapNotNull { item ->
+                val url = item.path("url").asText().ifBlank { null } ?: return@mapNotNull null
+                val caption = item.path("caption").asText().ifBlank { null } ?: return@mapNotNull null
+                val fullUrl = if (url.startsWith("http")) url else "$mainUrl$url"
+                val poster = item.path("poster").asText().let { p ->
+                    when {
+                        p.isBlank() -> null
+                        p.startsWith("http") -> p
+                        else -> "$mainUrl$p"
+                    }
+                }
+                newMovieSearchResponse(caption, fullUrl, TvType.NSFW) {
+                    this.posterUrl = poster
+                }
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
