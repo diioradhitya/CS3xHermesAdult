@@ -64,6 +64,14 @@ class JavtifulProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        // One-click play untuk Shorts: jika URL langsung adalah media URL (m3u8),
+        // langsung play tanpa ambil halaman detail HTML
+        if (url.contains(".m3u8") || url.contains("/shorts/playback/")) {
+            return newMovieLoadResponse(url, url, TvType.NSFW, url) {
+                this.posterUrl = null
+            }
+        }
+
         val doc = app.get(url, headers = baseHeaders).document
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: return null
@@ -160,8 +168,9 @@ class JavtifulProvider : MainAPI() {
                 if (node.path("success").asBoolean(false) && node.path("sources").isArray) {
                     result = node.path("sources").mapNotNull { s ->
                         val src = s.path("src").asText().ifBlank { null } ?: return@mapNotNull null
+                        val fullSrc = if (src.startsWith("http")) src else "$mainUrl$src"
                         val size = s.path("size").asInt(720)
-                        "${src}|${size}"
+                        "${fullSrc}|${size}"
                     }.joinToString(",,,")
                     break
                 }
@@ -264,7 +273,10 @@ class JavtifulProvider : MainAPI() {
                         else -> "$mainUrl$p"
                     }
                 }
-                newMovieSearchResponse(caption, fullUrl, TvType.NSFW) {
+                val mediaUrl = item.path("media").asText().ifBlank { null }
+                // One-click play: url di-set ke media URL (m3u8) langsung, load() akan deteksi
+                val shortUrl = mediaUrl ?: fullUrl
+                newMovieSearchResponse(caption, shortUrl, TvType.NSFW) {
                     this.posterUrl = poster
                 }
             }
