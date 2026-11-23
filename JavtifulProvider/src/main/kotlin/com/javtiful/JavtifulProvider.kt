@@ -68,26 +68,21 @@ class JavtifulProvider : MainAPI() {
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: return null
 
-        val video = doc.selectFirst("video#front-player") ?: return null
-        val sources = video.select("source").mapNotNull { src ->
-            val srcUrl = src.attr("src")
-            if (srcUrl.isBlank()) null
-            else {
-                val size = src.attr("size").ifBlank { "720" }.toIntOrNull() ?: 720
-                srcUrl to size
+        val poster = doc.selectFirst("video#front-player")?.attr("poster")
+            ?.let { p ->
+                when {
+                    p.isBlank() -> null
+                    p.startsWith("http") -> p
+                    else -> "$mainUrl$p"
+                }
             }
-        }
-        if (sources.isEmpty()) return null
-
-        val apiUrl = sources.joinToString(",,,") { "${it.first}|${it.second}" }
-
-        val poster = video.attr("poster").let { p ->
-            when {
-                p.isBlank() -> null
-                p.startsWith("http") -> p
-                else -> "$mainUrl$p"
+            ?: doc.selectFirst("meta[property='og:image']")?.attr("content")?.let { p ->
+                when {
+                    p.isBlank() -> null
+                    p.startsWith("http") -> p
+                    else -> "$mainUrl$p"
+                }
             }
-        }
 
         val plot = doc.selectFirst("meta[name='description']")?.attr("content")?.trim()
         val tags = doc.select("a[href*='/id/tag/']").map { it.text().trim() }
@@ -118,6 +113,24 @@ class JavtifulProvider : MainAPI() {
             else -> plot
         }
 
+        // Ekstrak video ID dari URL: /id/video/116220/slug
+        val videoId = url.substringAfter("/id/video/").substringBefore("/").takeWhile { it.isDigit() }
+        if (videoId.isBlank()) return null
+
+        // Ambil watch-config dari halaman embed untuk playback endpoint & ticket
+        val embedUrl = "$mainUrl/embed/$videoId"
+        val embedDoc = app.get(embedUrl, headers = baseHeaders).document
+        val configScript = embedDoc.selectFirst("script#watch-config") ?: return null
+        val configJson = configScript.data().ifBlank { configScript.html() }.ifBlank { return null }
+        val config = shortsMapper.readTree(configJson)
+        val playback = config.path("playback") ?: return null
+        val endpoint = playback.path("endpoint").asText().ifBlank { null } ?: return null
+        val ticket = playback.path("ticket").asText().ifBlank { null } ?: return null
+
+        val fullEndpoint = if (endpoint.startsWith("http")) endpoint else "$mainUrl$endpoint"
+        val apiUrl = fetchPlaybackSources(fullEndpoint, ticket)
+        if (apiUrl.isNullOrBlank()) return null
+
         val recommended = doc.parseVideoList()
 
         return newMovieLoadResponse(title, url, TvType.NSFW, apiUrl) {
@@ -127,6 +140,45 @@ class JavtifulProvider : MainAPI() {
             this.duration = durationMin
             this.recommendations = recommended
         }
+    }
+
+    private suspend fun fetchPlaybackSources(endpoint: String, ticket: String): String? {
+        val headers = mapOf(
+            "Content-Type" to "application/x-www-form-urlencoded;charset=UTF-8",
+            "Accept" to "application/json",
+            "X-Requested-With" to "XMLHttpRequest",
+            "Referer" to "$mainUrl/"
+        )
+        var currentTicket = ticket
+        var renewed = false
+        var result: String? = null
+        for (attempt in 0 until 2) {
+            if (result != null) break
+            val postBody = "ticket=${URLEncoder.encode(currentTicket, "UTF-8")}"
+            val bodyRes = app.post(endpoint, headers, postBody)
+            val respBody = bodyRes.body?.string() ?: continue
+            try {
+                val node = shortsMapper.readTree(respBody)
+                if (node.path("success").asBoolean(false) && node.path("sources").isArray) {
+                    result = node.path("sources").mapNotNull { s ->
+                        val src = s.path("src").asText().ifBlank { null } ?: return@mapNotNull null
+                        val size = s.path("size").asInt(720)
+                        "${src}|${size}"
+                    }.joinToString(",,,")
+                    break
+                }
+                // 409 + renewTicket -> coba sekali lagi dengan ticket baru
+                if (!renewed && node.path("renewTicket").isTextual) {
+                    currentTicket = node.path("renewTicket").asText()
+                    renewed = true
+                    continue
+                }
+                continue
+            } catch (e: Exception) {
+                continue
+            }
+        }
+        return result
     }
 
     override suspend fun loadLinks(
