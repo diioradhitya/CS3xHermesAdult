@@ -156,13 +156,13 @@ class JavtifulProvider : MainAPI() {
     }
 
     private fun org.jsoup.nodes.Document.parseVideoList(): List<SearchResponse> {
-        return this.select("article.front-video-card:not(.front-partner-card)").mapNotNull { card ->
-            val anchor = card.selectFirst("a.front-video-thumb") ?: return@mapNotNull null
+        return this.select("article.video-card:not(.video-card--partner)").mapNotNull { card ->
+            val anchor = card.selectFirst("a.video-card__thumbnail") ?: return@mapNotNull null
             val href = anchor.attr("href")
             if (href.isBlank()) return@mapNotNull null
             val fullUrl = if (href.startsWith("http")) href else "$mainUrl$href"
 
-            val title = card.selectFirst("a.front-video-title")?.text()?.trim()
+            val title = card.selectFirst("a.video-card__title")?.text()?.trim()
                 ?: anchor.attr("title").takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
 
@@ -175,8 +175,9 @@ class JavtifulProvider : MainAPI() {
                 }
             }
 
-            val quality = card.selectFirst(".front-quality-tag")?.text()?.trim()
-            val durationStr = card.selectFirst(".front-duration-tag")?.text()?.trim()
+            val details = card.selectFirst(".video-card__details")
+            val quality = details?.selectFirst("strong")?.text()?.trim()
+            val durationStr = details?.ownText()?.trim()
             val duration = durationStr?.let { parseDurationString(it) }
 
             newMovieSearchResponse(title, fullUrl, TvType.NSFW) {
