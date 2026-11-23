@@ -144,7 +144,6 @@ class JavtifulProvider : MainAPI() {
 
     private suspend fun fetchPlaybackSources(endpoint: String, ticket: String): String? {
         val headers = mapOf(
-            "Content-Type" to "application/x-www-form-urlencoded;charset=UTF-8",
             "Accept" to "application/json",
             "X-Requested-With" to "XMLHttpRequest",
             "Referer" to "$mainUrl/"
@@ -154,8 +153,7 @@ class JavtifulProvider : MainAPI() {
         var result: String? = null
         for (attempt in 0 until 2) {
             if (result != null) break
-            val postBody = "ticket=${URLEncoder.encode(currentTicket, "UTF-8")}"
-            val bodyRes = app.post(endpoint, headers, postBody)
+            val bodyRes = app.post(endpoint, headers = headers, data = mapOf("ticket" to currentTicket))
             val respBody = bodyRes.body?.string() ?: continue
             try {
                 val node = shortsMapper.readTree(respBody)
