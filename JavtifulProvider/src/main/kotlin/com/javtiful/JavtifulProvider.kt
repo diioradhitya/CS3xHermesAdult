@@ -64,15 +64,27 @@ class JavtifulProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        // One-click play untuk Shorts: jika URL langsung adalah media URL (m3u8),
-        // langsung play tanpa ambil halaman detail HTML
-        if (url.contains(".m3u8") || url.contains("/shorts/playback/")) {
-            return newMovieLoadResponse(url, url, TvType.NSFW, url) {
-                this.posterUrl = null
-            }
-        }
-
         val doc = app.get(url, headers = baseHeaders).document
+
+        // Shorts detail page: ekstrak media URL dari script#shorts-bootstrap
+        val isShortsPage = url.contains("/id/shorts/")
+        if (isShortsPage) {
+            val mediaUrl = extractShortsMediaUrl(doc, url)
+            if (!mediaUrl.isNullOrBlank()) {
+                val title = doc.selectFirst("h1")?.text()?.trim() ?: "Shorts"
+                val poster = doc.selectFirst("meta[property='og:image']")?.attr("content")?.let { p ->
+                    when {
+                        p.isBlank() -> null
+                        p.startsWith("http") -> p
+                        else -> "$mainUrl$p"
+                    }
+                }
+                return newMovieLoadResponse(title, url, TvType.NSFW, mediaUrl) {
+                    this.posterUrl = poster
+                }
+            }
+            return null
+        }
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: return null
 
@@ -195,12 +207,17 @@ class JavtifulProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val items = data.split(",,,").mapNotNull { entry ->
-            val parts = entry.trim().split("|")
+            val trimmed = entry.trim()
+            if (trimmed.isBlank()) return@mapNotNull null
+            val parts = trimmed.split("|")
             if (parts.size >= 2) {
                 val url = parts[0]
                 val quality = parts[1].toIntOrNull() ?: 720
                 url to quality
-            } else null
+            } else {
+                // Single URL tanpa separator quality (misal Shorts one-click play)
+                trimmed to 720
+            }
         }
         if (items.isEmpty()) return false
 
@@ -273,15 +290,32 @@ class JavtifulProvider : MainAPI() {
                         else -> "$mainUrl$p"
                     }
                 }
-                val mediaUrl = item.path("media").asText().ifBlank { null }
-                // One-click play: url di-set ke media URL (m3u8) langsung, load() akan deteksi
-                val shortUrl = mediaUrl ?: fullUrl
-                newMovieSearchResponse(caption, shortUrl, TvType.NSFW) {
+                // url di-set ke detail page URL (/id/shorts/{uid}), load() akan ekstrak media URL
+                newMovieSearchResponse(caption, fullUrl, TvType.NSFW) {
                     this.posterUrl = poster
                 }
             }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    private fun extractShortsMediaUrl(doc: org.jsoup.nodes.Document, pageUrl: String): String? {
+        val script = doc.selectFirst("script#shorts-bootstrap") ?: return null
+        val jsonText = script.data().ifBlank { script.html() }.ifBlank { return null }
+        return try {
+            val root = shortsMapper.readTree(jsonText)
+            val items = root.path("feed").path("items")
+            if (!items.isArray) return null
+            items.mapNotNull { item ->
+                val itemUrl = item.path("url").asText().ifBlank { null } ?: return@mapNotNull null
+                val fullItemUrl = if (itemUrl.startsWith("http")) itemUrl else "$mainUrl$itemUrl"
+                if (fullItemUrl == pageUrl) {
+                    item.path("media").asText().ifBlank { null }
+                } else null
+            }.firstOrNull { it != null }
+        } catch (e: Exception) {
+            null
         }
     }
 
